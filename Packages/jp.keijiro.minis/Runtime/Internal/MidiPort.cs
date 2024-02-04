@@ -14,11 +14,11 @@ namespace Minis
 
         RtMidiDll.Wrapper* _rtmidi;
         string _portName;
-        MidiDevice [] _channels = new MidiDevice[16];
+        MidiChannel [] _channels = new MidiChannel[16];
 
         // Get a device object bound with a specified channel.
         // Create a new device if it doesn't exist.
-        MidiDevice GetChannelDevice(int channel)
+        MidiChannel GetChannelDevice(int channel)
         {
             if (_channels[channel] == null)
             {
@@ -28,7 +28,7 @@ namespace Minis
                     product = _portName + " Channel " + channel,
                     capabilities = "{\"channel\":" + channel + "}"
                 };
-                _channels[channel] = (MidiDevice)InputSystem.AddDevice(desc);
+                _channels[channel] = new MidiChannel((MidiDevice)InputSystem.AddDevice(desc));
             }
             return _channels[channel];
         }
@@ -65,8 +65,8 @@ namespace Minis
             RtMidiDll.InFree(_rtmidi);
             _rtmidi = null;
 
-            foreach (var dev in _channels)
-                if (dev != null) InputSystem.RemoveDevice(dev);
+            foreach (var channel in _channels)
+                if (channel != null) channel.Dispose();
 
             System.GC.SuppressFinalize(this);
         }

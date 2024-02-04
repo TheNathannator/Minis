@@ -34,51 +34,6 @@ namespace Minis
             );
         }
 
-        // Based on InputSystem.QueueDeltaStateEvent<T>
-        internal static unsafe void QueueDeltaStateEvent<TDelta>(InputControl control, TDelta delta)
-            where TDelta : unmanaged
-        {
-            if (control == null)
-                throw new ArgumentNullException(nameof(control));
-
-            if (control.stateBlock.bitOffset != 0)
-                throw new InvalidOperationException($"Cannot send delta state events against bitfield controls: {control}");
-
-            var device = control.device;
-            if (device.deviceId == InputDevice.InvalidDeviceId)
-                throw new InvalidOperationException($"Cannot queue state event for control '{control}' on device '{device}' because device has not been added to system");
-
-            // Safety limit, to avoid allocating too much on the stack
-            const int MaxStateSize = 512;
-            int deltaSize = sizeof(TDelta);
-            if ((uint)deltaSize > MaxStateSize)
-                throw new ArgumentException($"Size of state delta '{typeof(TDelta).Name}' exceeds maximum supported state size of {MaxStateSize}",
-                    nameof(delta));
-
-            uint alignedSizeInBytes = (control.stateBlock.sizeInBits + 7) >> 3; // This is internal for some reason
-            if (deltaSize != alignedSizeInBytes)
-                throw new ArgumentException($"Size {deltaSize} of delta state of type {typeof(TDelta).Name} provided for control '{control}' does not match size {alignedSizeInBytes} of control",
-                    nameof(delta));
-
-            // Create state buffer
-            int eventSize = sizeof(DeltaStateEvent) + deltaSize - 1; // DeltaStateEvent already includes 1 byte at the end
-            byte* buffer = stackalloc byte[eventSize];
-            DeltaStateEvent* stateBuffer = (DeltaStateEvent*)buffer;
-            *stateBuffer = new DeltaStateEvent
-            {
-                baseEvent = new InputEvent(DeltaStateEvent.Type, eventSize, device.deviceId),
-                stateFormat = device.stateBlock.format,
-                stateOffset = control.stateBlock.byteOffset - device.stateBlock.byteOffset
-            };
-
-            // Copy state into buffer
-            UnsafeUtility.MemCpy(stateBuffer->deltaState, &delta, deltaSize);
-
-            // Queue state event
-            var eventPtr = new InputEventPtr((InputEvent*)buffer);
-            QueueEvent(eventPtr);
-        }
-
         internal static unsafe void QueueEvent(InputEventPtr eventPtr)
         {
             lock (_bufferLock)
