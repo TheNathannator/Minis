@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.Layouts;
-using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis {
 
@@ -87,7 +85,7 @@ public sealed class MidiDevice : InputDevice
     internal void ProcessNoteOn(byte note, byte velocity)
     {
         // State update with a delta event
-        InputSystem.QueueDeltaStateEvent(_notes[note], velocity);
+        MidiSystemWrangler.QueueDeltaStateEvent(_notes[note], velocity);
 
         // Note-on event invocation (only when it exists)
         var fvelocity = velocity / 127.0f;
@@ -99,7 +97,7 @@ public sealed class MidiDevice : InputDevice
     internal void ProcessNoteOff(byte note)
     {
         // State update with a delta event
-        InputSystem.QueueDeltaStateEvent(_notes[note], (byte)0);
+        MidiSystemWrangler.QueueDeltaStateEvent(_notes[note], (byte)0);
 
         // Note-off event invocation (only when it exists)
         if (_willNoteOffActions != null)
@@ -110,7 +108,7 @@ public sealed class MidiDevice : InputDevice
     internal void ProcessControlChange(byte number, byte value)
     {
         // State update with a delta event
-        InputSystem.QueueDeltaStateEvent(_controls[number], value);
+        MidiSystemWrangler.QueueDeltaStateEvent(_controls[number], value);
 
         // Control-change event invocation (only when it exists)
         var fvalue = value / 127.0f;
