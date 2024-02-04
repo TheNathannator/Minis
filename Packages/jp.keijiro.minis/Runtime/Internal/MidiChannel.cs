@@ -11,6 +11,8 @@ namespace Minis
     {
         private readonly ThreadedMidiDevice _pending;
 
+        private bool [] _activeNotes = new bool[128];
+
         public MidiChannel(ThreadedMidiDevice pending)
         {
             _pending = pending;
@@ -37,12 +39,18 @@ namespace Minis
 
         internal void ProcessNoteOn(byte note, byte velocity)
         {
+            // Consecutive note ons need to have a note off inserted in-between
+            if (_activeNotes[note])
+                ProcessNoteOff(note);
+
             SendDeltaEvent(note, velocity);
+            _activeNotes[note] = true;
         }
 
         internal void ProcessNoteOff(byte note)
         {
             SendDeltaEvent(note, 0);
+            _activeNotes[note] = false;
         }
 
         internal void ProcessControlChange(byte number, byte value)
