@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Minis
 {
@@ -10,8 +11,40 @@ namespace Minis
     {
         #region Internal objects and methods
 
-        MidiProbe _probe;
+        volatile bool _keepReading = true;
+        Thread _readThread;
+
+        MidiProbe _probe = new MidiProbe();
         List<MidiPort> _ports = new List<MidiPort>();
+
+        public MidiDriver()
+        {
+            _readThread = new Thread(ReadThread) { IsBackground = true };
+            _readThread.Start();
+        }
+
+        ~MidiDriver()
+        {
+            Dispose(false);
+        }
+
+        void ReadThread()
+        {
+            while (_keepReading)
+            {
+                // Rescan the ports if the count of the ports doesn't match.
+                if (_ports.Count != _probe.PortCount)
+                {
+                    DisposePorts();
+                    ScanPorts();
+                }
+
+                // Process MIDI message queues in the port objects.
+                foreach (var p in _ports) p.ProcessMessageQueue();
+
+                Thread.Yield();
+            }
+        }
 
         void ScanPorts()
         {
@@ -25,31 +58,29 @@ namespace Minis
             _ports.Clear();
         }
 
-        #endregion
-
-        #region Public methods
-
-        public void Update()
+        void Dispose(bool disposing)
         {
-            if (_probe == null) _probe = new MidiProbe();
+            _keepReading = false;
 
-            // Rescan the ports if the count of the ports doesn't match.
-            if (_ports.Count != _probe.PortCount)
+            if (disposing)
             {
-                DisposePorts();
-                ScanPorts();
+                _readThread?.Join();
+                _readThread = null;
             }
 
-            // Process MIDI message queues in the port objects.
-            foreach (var p in _ports) p.ProcessMessageQueue();
-        }
-
-        public void Dispose()
-        {
             DisposePorts();
 
             _probe?.Dispose();
             _probe = null;
+        }
+
+        #endregion
+
+        #region Public methods
+
+        public void Dispose()
+        {
+            Dispose(true);
         }
 
         #endregion

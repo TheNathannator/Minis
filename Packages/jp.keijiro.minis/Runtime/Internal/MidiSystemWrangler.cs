@@ -214,7 +214,6 @@ namespace Minis
 
         static void Update()
         {
-            _driver?.Update();
             FlushEventBuffer();
             ProcessDeviceQueue();
         }
