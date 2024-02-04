@@ -1,5 +1,6 @@
 using System;
-using Unity.Collections.LowLevel.Unsafe;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Layouts;
@@ -7,6 +8,20 @@ using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
 {
+    //
+    // Thin wrapper class for communication between threads about device management.
+    //
+    class ThreadedMidiDevice
+    {
+        public const int MaxUpdatesBeforeReclaim = 10;
+
+        public InputDeviceDescription description;
+
+        public volatile MidiDevice device = null;
+        public volatile bool claimed = false;
+        public volatile int updatesWithoutClaim = 0;
+    }
+
     //
     // Wrangler class that installs/uninstalls MIDI subsystems on system events
     // and handles many lower-level aspects that are necessary for correct threading.
@@ -20,6 +35,13 @@ namespace Minis
 
         static MidiDriver _driver;
 
+        // Devices must be added/removed on the main thread
+        private static readonly ConcurrentBag<ThreadedMidiDevice> _additionQueue = new ConcurrentBag<ThreadedMidiDevice>();
+        private static readonly ConcurrentBag<ThreadedMidiDevice> _removalQueue = new ConcurrentBag<ThreadedMidiDevice>();
+
+        // Keep track of unclaimed devices to avoid leaking them if they don't get claimed
+        private static readonly List<ThreadedMidiDevice> _unclaimedDevices = new List<ThreadedMidiDevice>();
+
         static readonly SlimEventBuffer[] _inputBuffers = new SlimEventBuffer[2];
         static readonly object _bufferLock = new object();
         static int _currentBuffer = 0;
@@ -32,6 +54,18 @@ namespace Minis
             InputSystem.RegisterLayout<MidiDevice>(
                 matches: new InputDeviceMatcher().WithInterface("Minis")
             );
+        }
+
+        internal static ThreadedMidiDevice QueueDeviceAddition(in InputDeviceDescription description)
+        {
+            var device = new ThreadedMidiDevice() { description = description };
+            _additionQueue.Add(device);
+            return device;
+        }
+
+        internal static void QueueDeviceRemoval(ThreadedMidiDevice device)
+        {
+            _removalQueue.Add(device);
         }
 
         internal static unsafe void QueueEvent(InputEventPtr eventPtr)
@@ -64,6 +98,44 @@ namespace Minis
             }
 
             buffer.Reset();
+        }
+
+        static void ProcessDeviceQueue()
+        {
+            // Process additions
+            while (!_additionQueue.IsEmpty && _additionQueue.TryTake(out var pending))
+            {
+                pending.device = (MidiDevice)InputSystem.AddDevice(pending.description);
+                _unclaimedDevices.Add(pending);
+            }
+
+            // Process removals
+            while (!_removalQueue.IsEmpty && _removalQueue.TryTake(out var pending))
+            {
+                InputSystem.RemoveDevice(pending.device);
+                _unclaimedDevices.Remove(pending);
+            }
+
+            // Track unclaimed devices
+            for (int i = 0; i < _unclaimedDevices.Count; i++)
+            {
+                var pending = _unclaimedDevices[i];
+                if (pending.claimed)
+                {
+                    _unclaimedDevices.RemoveAt(i);
+                    i--;
+                }
+                else if (pending.updatesWithoutClaim >= ThreadedMidiDevice.MaxUpdatesBeforeReclaim)
+                {
+                    InputSystem.RemoveDevice(pending.device);
+                    _unclaimedDevices.RemoveAt(i);
+                    i--;
+                }
+                else
+                {
+                    pending.updatesWithoutClaim++;
+                }
+            }
         }
 
         #endregion
@@ -144,6 +216,7 @@ namespace Minis
         {
             _driver?.Update();
             FlushEventBuffer();
+            ProcessDeviceQueue();
         }
 
         #endregion

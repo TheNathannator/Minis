@@ -28,7 +28,7 @@ namespace Minis
                     product = _portName + " Channel " + channel,
                     capabilities = "{\"channel\":" + channel + "}"
                 };
-                _channels[channel] = new MidiChannel((MidiDevice)InputSystem.AddDevice(desc));
+                _channels[channel] = new MidiChannel(MidiSystemWrangler.QueueDeviceAddition(desc));
             }
             return _channels[channel];
         }
@@ -66,7 +66,7 @@ namespace Minis
             _rtmidi = null;
 
             foreach (var channel in _channels)
-                if (channel != null) channel.Dispose();
+                channel?.Dispose();
 
             System.GC.SuppressFinalize(this);
         }
@@ -74,6 +74,9 @@ namespace Minis
         public void ProcessMessageQueue()
         {
             if (_rtmidi == null || !_rtmidi->ok) return;
+
+            foreach (var channel in _channels)
+                channel?.CheckClaimed();
 
             while (true)
             {

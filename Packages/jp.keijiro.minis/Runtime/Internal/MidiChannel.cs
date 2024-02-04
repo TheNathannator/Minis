@@ -9,16 +9,28 @@ namespace Minis
     //
     sealed class MidiChannel : System.IDisposable
     {
-        private readonly MidiDevice _device;
+        private readonly ThreadedMidiDevice _pending;
 
-        public MidiChannel(MidiDevice device)
+        public MidiChannel(ThreadedMidiDevice pending)
         {
-            _device = device;
+            _pending = pending;
+        }
+
+        public void CheckClaimed()
+        {
+            if (!_pending.claimed)
+            {
+                if (_pending.device == null)
+                    return;
+
+                _pending.claimed = true;
+            }
         }
 
         public void Dispose()
         {
-            InputSystem.RemoveDevice(_device);
+            if (_pending.claimed)
+                InputSystem.RemoveDevice(_pending.device);
         }
 
         #region MIDI event receiver (invoked from MidiPort)
@@ -40,13 +52,15 @@ namespace Minis
 
         unsafe void SendDeltaEvent(uint offset, byte value)
         {
-            if (_device == null)
+            CheckClaimed();
+            if (!_pending.claimed)
                 return;
 
+            var device = _pending.device;
             var delta = new DeltaStateEvent()
             {
-                baseEvent = new InputEvent(DeltaStateEvent.Type, sizeof(DeltaStateEvent), _device.deviceId),
-                stateFormat = _device.stateBlock.format,
+                baseEvent = new InputEvent(DeltaStateEvent.Type, sizeof(DeltaStateEvent), device.deviceId),
+                stateFormat = device.stateBlock.format,
                 stateOffset = offset
             };
 
