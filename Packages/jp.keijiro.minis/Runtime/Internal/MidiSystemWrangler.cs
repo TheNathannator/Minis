@@ -133,7 +133,7 @@ namespace Minis
 
         //
         // On Player, we use RuntimeInitializeOnLoadMethod to install the
-        // subsystems. We don't do anything about finalization.
+        // subsystems.
         //
 
     #if !UNITY_EDITOR
@@ -156,18 +156,29 @@ namespace Minis
             InputSystem.onBeforeUpdate += Update;
 
         #if UNITY_EDITOR
-
             // Uninstall the driver on domain reload.
-            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += () => {
-                _driver?.Dispose();
-                _driver = null;
-            };
-
-            // Reinstall the driver after domain reload.
-            UnityEditor.AssemblyReloadEvents.afterAssemblyReload += () => {
-                _driver = _driver ?? new MidiDriver();
-            };
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += Uninitialize;
+            // Uninstall the driver when quitting.
+            UnityEditor.EditorApplication.quitting += Uninitialize;
+        #else
+            // Uninstall the driver when quitting.
+            Application.quitting += Uninitialize;
         #endif
+        }
+
+        static void Uninitialize()
+        {
+            InputSystem.onBeforeUpdate -= Update;
+
+        #if UNITY_EDITOR
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Uninitialize;
+            UnityEditor.EditorApplication.quitting -= Uninitialize;
+        #else
+            Application.quitting -= Uninitialize;
+        #endif
+
+            _driver?.Dispose();
+            _driver = null;
         }
 
         #endregion
