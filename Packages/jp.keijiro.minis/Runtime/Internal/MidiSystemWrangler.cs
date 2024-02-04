@@ -1,7 +1,5 @@
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Layouts;
-using UnityEngine.LowLevel;
-using System.Linq;
 
 namespace Minis
 {
@@ -11,7 +9,7 @@ namespace Minis
 #if UNITY_EDITOR
     [UnityEditor.InitializeOnLoad]
 #endif
-    sealed class MidiSystemWrangler
+    static class MidiSystemWrangler
     {
         #region Internal objects and methods
 
@@ -29,33 +27,6 @@ namespace Minis
 
         #endregion
 
-        #region PlayerLoopSystem implementation
-
-        static void InsertPlayerLoopSystem()
-        {
-            var customSystem = new PlayerLoopSystem() {
-                type = typeof(MidiSystemWrangler),
-                updateDelegate = () => _driver?.Update()
-            };
-
-            var playerLoop = PlayerLoop.GetCurrentPlayerLoop();
-
-            for (var i = 0; i < playerLoop.subSystemList.Length; i++)
-            {
-                ref var phase = ref playerLoop.subSystemList[i];
-                if (phase.type == typeof(UnityEngine.PlayerLoop.EarlyUpdate))
-                {
-                    phase.subSystemList =
-                        phase.subSystemList.Concat(new [] { customSystem }).ToArray();
-                    break;
-                }
-            }
-
-            PlayerLoop.SetPlayerLoop(playerLoop);
-        }
-
-        #endregion
-
         #region System initialization/finalization callback
 
         #if UNITY_EDITOR
@@ -69,13 +40,30 @@ namespace Minis
 
         static MidiSystemWrangler()
         {
-            RegisterLayout();
-            InsertPlayerLoopSystem();
+            Initialize();
+        }
 
-            // We use not only PlayerLoopSystem but also the
-            // EditorApplication.update callback because the PlayerLoop events
-            // are not invoked in the edit mode.
-            UnityEditor.EditorApplication.update += () => _driver?.Update();
+        #endif
+
+        //
+        // On Player, we use RuntimeInitializeOnLoadMethod to install the
+        // subsystems. We don't do anything about finalization.
+        //
+
+    #if !UNITY_EDITOR
+        [UnityEngine.RuntimeInitializeOnLoadMethod]
+    #endif
+        static void Initialize()
+        {
+            RegisterLayout();
+            _driver = new MidiDriver();
+
+            // We use the input system's onBeforeUpdate callback to queue events
+            // just before it processes its event queue. This is called in both
+            // edit mode and play mode.
+            InputSystem.onBeforeUpdate += () => _driver?.Update();
+
+        #if UNITY_EDITOR
 
             // Uninstall the driver on domain reload.
             UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += () => {
@@ -87,24 +75,8 @@ namespace Minis
             UnityEditor.AssemblyReloadEvents.afterAssemblyReload += () => {
                 _driver = _driver ?? new MidiDriver();
             };
-        }
-
-        #else
-
-        //
-        // On Player, we use RuntimeInitializeOnLoadMethod to install the
-        // subsystems. We don't do anything about finalization.
-        //
-
-        [UnityEngine.RuntimeInitializeOnLoadMethod]
-        static void Initialize()
-        {
-            RegisterLayout();
-            InsertPlayerLoopSystem();
-            _driver = new MidiDriver();
-        }
-
         #endif
+        }
 
         #endregion
     }
