@@ -15,6 +15,7 @@ namespace Minis
         RtMidiDll.Wrapper* _rtmidi;
         string _portName;
         MidiChannel [] _channels = new MidiChannel[16];
+        MidiChannel _mainDevice;
 
         // Get a device object bound with a specified channel.
         // Create a new device if it doesn't exist.
@@ -50,6 +51,14 @@ namespace Minis
             }
 
             RtMidiDll.OpenPort(_rtmidi, (uint)portNumber, "RtMidi Input");
+            var desc = new InputDeviceDescription {
+                interfaceName = "Minis",
+                deviceClass = "MIDI",
+                product = _portName,
+            };
+            var device = MidiSystemWrangler.QueueDeviceAddition(desc);
+            device.claimed = true;
+            _mainDevice = new MidiChannel(device);
         }
 
         ~MidiPort()
@@ -68,6 +77,7 @@ namespace Minis
             foreach (var channel in _channels)
                 channel?.Dispose();
 
+            _mainDevice.Dispose();
             System.GC.SuppressFinalize(this);
         }
 
@@ -96,11 +106,20 @@ namespace Minis
                 var noteOff = (status == 8) || (status == 9 && data2 == 0);
 
                 if (status == 9 && !noteOff)
+                {
+                    _mainDevice.ProcessNoteOn(data1, data2);
                     GetChannelDevice(channel).ProcessNoteOn(data1, data2);
+                }
                 else if (noteOff)
+                {
+                    _mainDevice.ProcessNoteOff(data1);
                     GetChannelDevice(channel).ProcessNoteOff(data1);
+                }
                 else if (status == 0xb)
+                {
+                    _mainDevice.ProcessControlChange(data1, data2);
                     GetChannelDevice(channel).ProcessControlChange(data1, data2);
+                }
             }
         }
 
