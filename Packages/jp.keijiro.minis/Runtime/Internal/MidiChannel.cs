@@ -1,4 +1,3 @@
-using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
@@ -9,30 +8,19 @@ namespace Minis
     //
     sealed class MidiChannel : System.IDisposable
     {
-        private readonly ThreadedMidiDevice _pending;
+        private readonly ThreadedMidiDevice _device;
 
         private bool [] _activeNotes = new bool[128];
 
         public MidiChannel(ThreadedMidiDevice pending)
         {
-            _pending = pending;
-        }
-
-        public void CheckClaimed()
-        {
-            if (!_pending.claimed)
-            {
-                if (_pending.device == null)
-                    return;
-
-                _pending.claimed = true;
-            }
+            _device = pending;
         }
 
         public void Dispose()
         {
-            if (_pending.claimed)
-                InputSystem.RemoveDevice(_pending.device);
+            if (_device.device != null)
+                MidiSystemWrangler.QueueDeviceRemoval(_device);
         }
 
         #region MIDI event receiver (invoked from MidiPort)
@@ -60,11 +48,10 @@ namespace Minis
 
         unsafe void SendDeltaEvent(uint offset, byte value)
         {
-            CheckClaimed();
-            if (!_pending.claimed)
+            if (_device.device == null)
                 return;
 
-            var device = _pending.device;
+            var device = _device.device;
             var delta = new DeltaStateEvent()
             {
                 baseEvent = new InputEvent(DeltaStateEvent.Type, sizeof(DeltaStateEvent), device.deviceId),

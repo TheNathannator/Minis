@@ -56,9 +56,7 @@ namespace Minis
                 deviceClass = "MIDI",
                 product = _portName,
             };
-            var device = MidiSystemWrangler.QueueDeviceAddition(desc);
-            device.claimed = true;
-            _mainDevice = new MidiChannel(device);
+            _mainDevice = new MidiChannel(MidiSystemWrangler.QueueDeviceAddition(desc));
         }
 
         ~MidiPort()
@@ -84,9 +82,6 @@ namespace Minis
         public void ProcessMessageQueue()
         {
             if (_rtmidi == null || !_rtmidi->ok) return;
-
-            foreach (var channel in _channels)
-                channel?.CheckClaimed();
 
             while (true)
             {

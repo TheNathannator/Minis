@@ -13,13 +13,9 @@ namespace Minis
     //
     class ThreadedMidiDevice
     {
-        public const int MaxUpdatesBeforeReclaim = 10;
-
         public InputDeviceDescription description;
 
         public volatile MidiDevice device = null;
-        public volatile bool claimed = false;
-        public volatile int updatesWithoutClaim = 0;
     }
 
     //
@@ -114,27 +110,6 @@ namespace Minis
             {
                 InputSystem.RemoveDevice(pending.device);
                 _unclaimedDevices.Remove(pending);
-            }
-
-            // Track unclaimed devices
-            for (int i = 0; i < _unclaimedDevices.Count; i++)
-            {
-                var pending = _unclaimedDevices[i];
-                if (pending.claimed)
-                {
-                    _unclaimedDevices.RemoveAt(i);
-                    i--;
-                }
-                else if (pending.updatesWithoutClaim >= ThreadedMidiDevice.MaxUpdatesBeforeReclaim)
-                {
-                    InputSystem.RemoveDevice(pending.device);
-                    _unclaimedDevices.RemoveAt(i);
-                    i--;
-                }
-                else
-                {
-                    pending.updatesWithoutClaim++;
-                }
             }
         }
 
