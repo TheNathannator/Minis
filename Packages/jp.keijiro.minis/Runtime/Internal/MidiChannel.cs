@@ -1,3 +1,4 @@
+using System;
 using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
@@ -6,11 +7,11 @@ namespace Minis
     // MIDI device driver class that manages all MIDI ports (interfaces) found
     // in the system.
     //
-    sealed class MidiChannel : System.IDisposable
+    sealed class MidiChannel : IDisposable
     {
         private readonly ThreadedMidiDevice _device;
 
-        private bool [] _activeNotes = new bool[128];
+        private bool[] _activeNotes = new bool[128];
 
         public MidiChannel(ThreadedMidiDevice pending)
         {
@@ -55,7 +56,7 @@ namespace Minis
             var delta = new DeltaStateEvent()
             {
                 baseEvent = new InputEvent(DeltaStateEvent.Type, sizeof(DeltaStateEvent), device.deviceId),
-                stateFormat = device.stateBlock.format,
+                stateFormat = MidiDeviceState.Format,
                 stateOffset = offset
             };
 

@@ -1,4 +1,6 @@
-using Marshal = System.Runtime.InteropServices.Marshal;
+using System;
+using System.Runtime.InteropServices;
+using UnityEngine;
 using RtMidiDll = RtMidi.Unmanaged;
 
 namespace Minis
@@ -8,7 +10,7 @@ namespace Minis
     //
     // This is actually an RtMidi input object without any input functionality.
     //
-    unsafe sealed class MidiProbe : System.IDisposable
+    unsafe sealed class MidiProbe : IDisposable
     {
         RtMidiDll.Wrapper* _rtmidi;
 
@@ -17,7 +19,7 @@ namespace Minis
             _rtmidi = RtMidiDll.InCreateDefault();
 
             if (_rtmidi == null || !_rtmidi->ok)
-                UnityEngine.Debug.LogWarning("Failed to create an RtMidi device object.");
+                Debug.LogWarning("Failed to create an RtMidi device object.");
         }
 
         ~MidiProbe()
@@ -33,11 +35,13 @@ namespace Minis
             RtMidiDll.InFree(_rtmidi);
             _rtmidi = null;
 
-            System.GC.SuppressFinalize(this);
+            GC.SuppressFinalize(this);
         }
 
-        public int PortCount {
-            get {
+        public int PortCount
+        {
+            get
+            {
                 if (_rtmidi == null || !_rtmidi->ok) return 0;
                 return (int)RtMidiDll.GetPortCount(_rtmidi);
             }

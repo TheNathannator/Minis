@@ -1,5 +1,5 @@
+using System;
 using UnityEngine.InputSystem.Layouts;
-using UnityEngine.InputSystem;
 using RtMidiDll = RtMidi.Unmanaged;
 
 namespace Minis
@@ -8,13 +8,13 @@ namespace Minis
     // MIDI port class that manages an RtMidi input object and MIDI device
     // objects bound with each MIDI channel found in the port.
     //
-    unsafe sealed class MidiPort : System.IDisposable
+    unsafe sealed class MidiPort : IDisposable
     {
         #region Internal objects and methods
 
         RtMidiDll.Wrapper* _rtmidi;
         string _portName;
-        MidiChannel [] _channels = new MidiChannel[16];
+        MidiChannel[] _channels = new MidiChannel[16];
         MidiChannel _mainDevice;
 
         // Get a device object bound with a specified channel.
@@ -23,7 +23,8 @@ namespace Minis
         {
             if (_channels[channel] == null)
             {
-                var desc = new InputDeviceDescription {
+                var desc = new InputDeviceDescription()
+                {
                     interfaceName = "Minis",
                     deviceClass = "MIDI",
                     product = _portName + " Channel " + channel,
@@ -51,7 +52,8 @@ namespace Minis
             }
 
             RtMidiDll.OpenPort(_rtmidi, (uint)portNumber, "RtMidi Input");
-            var desc = new InputDeviceDescription {
+            var desc = new InputDeviceDescription()
+            {
                 interfaceName = "Minis",
                 deviceClass = "MIDI",
                 product = _portName,
@@ -86,7 +88,7 @@ namespace Minis
             while (true)
             {
                 var size = 4ul;
-                var message = stackalloc byte [(int)size];
+                var message = stackalloc byte[(int)size];
 
                 var stamp = RtMidiDll.InGetMessage(_rtmidi, message, ref size);
                 if (size != 3) break;

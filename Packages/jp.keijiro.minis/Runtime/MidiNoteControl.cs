@@ -1,14 +1,22 @@
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
+using UnityEngine.InputSystem.LowLevel;
+
 namespace Minis
 {
     //
     // Custom control class for MIDI nots
     //
-    public class MidiNoteControl : UnityEngine.InputSystem.Controls.ButtonControl
+    public class MidiNoteControl : ButtonControl
     {
+        internal static void Initialize()
+        {
+            InputSystem.RegisterLayout<MidiNoteControl>("MidiNote");
+        }
+
         public MidiNoteControl()
         {
-            m_StateBlock.format =
-                UnityEngine.InputSystem.LowLevel.InputStateBlock.FormatByte;
+            m_StateBlock.format = InputStateBlock.FormatByte;
 
             // AxisControl parameters
             normalize = true;
@@ -19,7 +27,7 @@ namespace Minis
         }
 
         // Calculate note number from offset
-        public int noteNumber { get { return (int)stateOffsetRelativeToDeviceRoot; } }
+        public int noteNumber => (int)stateOffsetRelativeToDeviceRoot;
 
         // Current velocity value; Returns zero when key off.
         public float velocity => ReadValue();

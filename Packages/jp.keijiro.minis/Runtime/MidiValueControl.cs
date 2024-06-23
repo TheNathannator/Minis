@@ -1,14 +1,22 @@
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
+using UnityEngine.InputSystem.LowLevel;
+
 namespace Minis
 {
     //
     // Custom control class for MIDI controls
     //
-    public class MidiValueControl : UnityEngine.InputSystem.Controls.AxisControl
+    public class MidiValueControl : AxisControl
     {
+        internal static void Initialize()
+        {
+            InputSystem.RegisterLayout<MidiValueControl>("MidiValue");
+        }
+
         public MidiValueControl()
         {
-            m_StateBlock.format =
-                UnityEngine.InputSystem.LowLevel.InputStateBlock.FormatByte;
+            m_StateBlock.format = InputStateBlock.FormatByte;
 
             // AxisControl parameters
             normalize = true;
@@ -16,7 +24,6 @@ namespace Minis
         }
 
         // Calculate control number from offset
-        public int controlNumber { get { return (int)stateOffsetRelativeToDeviceRoot - 128; } }
+        public int controlNumber => (int)stateOffsetRelativeToDeviceRoot - 128;
     }
 }
-

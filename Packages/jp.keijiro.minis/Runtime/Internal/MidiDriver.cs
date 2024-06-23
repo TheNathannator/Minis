@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 
@@ -7,7 +8,7 @@ namespace Minis
     // MIDI device driver class that manages all MIDI ports (interfaces) found
     // in the system.
     //
-    sealed class MidiDriver : System.IDisposable
+    sealed class MidiDriver : IDisposable
     {
         #region Internal objects and methods
 
