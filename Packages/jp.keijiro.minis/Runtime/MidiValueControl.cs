@@ -4,9 +4,9 @@ using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
 {
-    //
-    // Custom control class for MIDI controls
-    //
+    /// <summary>
+    /// A control input on a MIDI device.
+    /// </summary>
     public class MidiValueControl : AxisControl
     {
         internal static void Initialize()
@@ -16,11 +16,8 @@ namespace Minis
 
         public MidiValueControl()
         {
-            m_StateBlock.format = InputStateBlock.FormatByte;
-
-            // AxisControl parameters
-            normalize = true;
-            normalizeMax = 0.49803921568f;
+            m_StateBlock.format = InputStateBlock.FormatBit;
+            m_StateBlock.sizeInBits = 7;
         }
 
         // Calculate control number from offset

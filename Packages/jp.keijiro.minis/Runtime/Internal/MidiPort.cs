@@ -159,6 +159,19 @@ namespace Minis
                     GetChannelDevice(channel).ProcessControlChange(control, value);
                     break;
                 }
+                case MidiStatus.PitchBend:
+                {
+                    if (length < 2)
+                        break;
+
+                    int channel = arg;
+                    byte lsb = buffer[0];
+                    byte msb = buffer[1];
+
+                    _allChannels.ProcessPitchBend(msb, lsb);
+                    GetChannelDevice(channel).ProcessPitchBend(msb, lsb);
+                    break;
+                }
             }
         }
 

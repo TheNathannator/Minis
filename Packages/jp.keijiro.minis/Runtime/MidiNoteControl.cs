@@ -4,9 +4,9 @@ using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
 {
-    //
-    // Custom control class for MIDI nots
-    //
+    /// <summary>
+    /// A note input on a MIDI device.
+    /// </summary>
     public class MidiNoteControl : ButtonControl
     {
         internal static void Initialize()
@@ -16,11 +16,8 @@ namespace Minis
 
         public MidiNoteControl()
         {
-            m_StateBlock.format = InputStateBlock.FormatByte;
-
-            // AxisControl parameters
-            normalize = true;
-            normalizeMax = 0.49803921568f;
+            m_StateBlock.format = InputStateBlock.FormatBit;
+            m_StateBlock.sizeInBits = 7;
 
             // ButtonControl parameters
             pressPoint = 1.0f / 127;

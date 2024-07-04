@@ -40,6 +40,8 @@ namespace Minis
         public MidiValueControl GetControl(int controlNumber)
           => _controls[controlNumber];
 
+        public MidiPitchControl pitchBend { get; private set; }
+
         // Will-note-on event
         //
         // The input system fires this event before processing a note-on message on
@@ -136,6 +138,8 @@ namespace Minis
                 _notes[i] = GetChildControl<MidiNoteControl>("note" + i.ToString("D3"));
                 _controls[i] = GetChildControl<MidiValueControl>("control" + i.ToString("D3"));
             }
+
+            pitchBend = GetChildControl<MidiPitchControl>("pitchBend");
 
             // Retrieve capability info
             var capabilities = new MidiDeviceCapabilities()

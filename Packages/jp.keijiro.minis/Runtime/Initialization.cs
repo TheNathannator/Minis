@@ -36,6 +36,7 @@ namespace Minis
                 // Layouts
                 MidiNoteControl.Initialize();
                 MidiValueControl.Initialize();
+                MidiPitchControl.Initialize();
                 MidiDevice.Initialize();
 
                 // Backend

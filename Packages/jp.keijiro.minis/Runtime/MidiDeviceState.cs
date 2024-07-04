@@ -6,14 +6,18 @@ using UnityEngine.InputSystem.Utilities;
 
 namespace Minis
 {
-    //
-    // MIDI state struct with 128 notes and 128 controls
-    //
+    /// <summary>
+    /// The state format used for a MIDI device.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     public unsafe struct MidiDeviceState : IInputStateTypeInfo
     {
         public static readonly FourCC Format = new FourCC('M', 'I', 'D', 'J');
         public FourCC format => Format;
+
+        public const uint NoteOffset = 0;
+        public const uint ControlOffset = NoteOffset + 128;
+        public const uint PitchBendOffset = ControlOffset + 128;
 
         [InputControl(name = "note000", displayName = "Note C-1",  shortDisplayName = "C-1",  layout = "MidiNote", offset = 0)]
         [InputControl(name = "note001", displayName = "Note C#-1", shortDisplayName = "C#-1", layout = "MidiNote", offset = 1)]
@@ -274,5 +278,10 @@ namespace Minis
         [InputControl(name = "control126", displayName = "Control 126", shortDisplayName = "CC 126", layout = "MidiValue", offset = 254)]
         [InputControl(name = "control127", displayName = "Control 127", shortDisplayName = "CC 127", layout = "MidiValue", offset = 255)]
         public fixed byte controls[128];
+
+        // Format/size must be specified directly since the input system overrides it with the type of the field
+        // [InputControl(name = "pitchBend", displayName = "Pitch Bend", shortDisplayName = "Pitch", layout = "MidiPitch", defaultState = 8192)]
+        [InputControl(name = "pitchBend", displayName = "Pitch Bend", shortDisplayName = "Pitch", layout = "MidiPitch", format = "BIT", sizeInBits = 14, defaultState = 8192)]
+        public ushort pitchBend;
     }
 }

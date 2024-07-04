@@ -68,31 +68,41 @@ namespace Minis
 
         public void ProcessNoteOff(byte note)
         {
-            SendDeltaEvent(note, 0);
+            SendDeltaEvent(MidiDeviceState.NoteOffset + note, 0);
             _activeNotes[note] = false;
         }
 
         public void ProcessControlChange(byte number, byte value)
         {
-            SendDeltaEvent(number + 128u, value);
+            SendDeltaEvent(MidiDeviceState.ControlOffset + number, value);
         }
 
-        private unsafe void SendDeltaEvent(uint offset, byte value)
+        public void ProcessPitchBend(byte msb, byte lsb)
+        {
+            ushort value = (ushort)((msb << 7) | lsb);
+            SendDeltaEvent(MidiDeviceState.PitchBendOffset, value);
+        }
+
+        private unsafe void SendDeltaEvent<T>(uint offset, T value)
+            where T : unmanaged
         {
             if (_device == null)
                 return;
 
-            var delta = new DeltaStateEvent()
+            // DeltaStateEvent already includes one byte of state data
+            int eventSize = sizeof(DeltaStateEvent) - 1 + sizeof(T);
+            byte* _delta = stackalloc byte[eventSize];
+            var delta = (DeltaStateEvent*)_delta;
+
+            *delta = new DeltaStateEvent()
             {
-                baseEvent = new InputEvent(DeltaStateEvent.Type, sizeof(DeltaStateEvent), _device.deviceId),
+                baseEvent = new InputEvent(DeltaStateEvent.Type, eventSize, _device.deviceId),
                 stateFormat = MidiDeviceState.Format,
                 stateOffset = offset
             };
+            *(T*)delta->deltaState = value;
 
-            // DeltaStateEvent always contains one byte in its state data as a field
-            *(byte*)delta.deltaState = value;
-
-            _backend.QueueEvent(&delta.baseEvent);
+            _backend.QueueEvent(&delta->baseEvent);
         }
     }
 }
