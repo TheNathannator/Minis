@@ -9,6 +9,8 @@ namespace Minis
     /// </summary>
     internal static partial class Initialization
     {
+        private static MidiBackend _backend;
+
         /// <summary>
         /// Initializes everything.
         /// </summary>
@@ -31,7 +33,13 @@ namespace Minis
 
             try
             {
-                MidiSystemWrangler.Initialize();
+                // Layouts
+                MidiNoteControl.Initialize();
+                MidiValueControl.Initialize();
+                MidiDevice.Initialize();
+
+                // Backend
+                _backend = new MidiBackend();
             }
             catch (Exception ex)
             {
@@ -51,7 +59,7 @@ namespace Minis
 
             try
             {
-                MidiSystemWrangler.Uninitialize();
+                _backend?.Dispose();
             }
             catch (Exception ex)
             {

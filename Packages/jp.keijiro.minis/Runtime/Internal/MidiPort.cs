@@ -1,125 +1,173 @@
 using System;
-using UnityEngine.InputSystem.Layouts;
-using RtMidiDll = RtMidi.Unmanaged;
+using System.Threading;
+using Minis.Native;
+using UnityEngine;
+
+using static Minis.Native.RtMidi;
 
 namespace Minis
 {
-    //
-    // MIDI port class that manages an RtMidi input object and MIDI device
-    // objects bound with each MIDI channel found in the port.
-    //
-    unsafe sealed class MidiPort : IDisposable
+    internal enum MidiStatus
     {
-        #region Internal objects and methods
+        NoteOff = 0x8,
+        NoteOn = 0x9,
+        NotePressure = 0xA,
+        ControlChange = 0xB,
+        ProgramChange = 0xC,
+        ChannelPressure = 0xD,
+        PitchBend = 0xE,
+        System = 0xF,
+    }
 
-        RtMidiDll.Wrapper* _rtmidi;
-        string _portName;
-        MidiChannel[] _channels = new MidiChannel[16];
-        MidiChannel _mainDevice;
+    /// <summary>
+    /// A MIDI device, as reported by RtMidi.
+    /// </summary>
+    internal unsafe sealed class MidiPort : IDisposable
+    {
+        private readonly MidiBackend _backend;
 
-        // Get a device object bound with a specified channel.
-        // Create a new device if it doesn't exist.
-        MidiChannel GetChannelDevice(int channel)
+        private RtMidiInHandle _portHandle;
+        public readonly string name;
+
+        private MidiChannel _allChannels;
+        private readonly MidiChannel[] _channels = new MidiChannel[16];
+
+        private Thread _readThread;
+        private volatile bool _keepReading = true;
+
+        public MidiPort(MidiBackend backend, uint portNumber)
         {
-            if (_channels[channel] == null)
+            _backend = backend;
+
+            _portHandle = rtmidi_in_create_default();
+            if (_portHandle == null || _portHandle.IsInvalid)
+                throw new Exception("Failed to create RtMidi handle!");
+
+            name = rtmidi_get_port_name(_portHandle, portNumber);
+            rtmidi_open_port(_portHandle, portNumber, "RtMidi Input");
+            if (!_portHandle.Ok)
             {
-                var desc = new InputDeviceDescription()
-                {
-                    interfaceName = "Minis",
-                    deviceClass = "MIDI",
-                    product = _portName + " Channel " + channel,
-                    capabilities = "{\"channel\":" + channel + "}"
-                };
-                _channels[channel] = new MidiChannel(MidiSystemWrangler.QueueDeviceAddition(desc));
+                string error = _portHandle.ErrorMessage;
+                _portHandle.Dispose();
+                throw new Exception($"Failed to open port {portNumber}: {error}");
             }
-            return _channels[channel];
-        }
 
-        #endregion
+            _allChannels = new MidiChannel(_backend, this, -1);
 
-        #region Public methods
-
-        public MidiPort(int portNumber, string portName)
-        {
-            _portName = portName;
-
-            _rtmidi = RtMidiDll.InCreateDefault();
-
-            if (_rtmidi == null || !_rtmidi->ok)
-            {
-                UnityEngine.Debug.LogWarning("Failed to create an RtMidi device object.");
-                return;
-            }
-
-            RtMidiDll.OpenPort(_rtmidi, (uint)portNumber, "RtMidi Input");
-            var desc = new InputDeviceDescription()
-            {
-                interfaceName = "Minis",
-                deviceClass = "MIDI",
-                product = _portName,
-            };
-            _mainDevice = new MidiChannel(MidiSystemWrangler.QueueDeviceAddition(desc));
-        }
-
-        ~MidiPort()
-        {
-            if (_rtmidi == null || !_rtmidi->ok) return;
-            RtMidiDll.InFree(_rtmidi);
+            _readThread = new Thread(ReadThread) { IsBackground = true };
+            _readThread.Start();
         }
 
         public void Dispose()
         {
-            if (_rtmidi == null || !_rtmidi->ok) return;
+            _keepReading = false;
+            _readThread?.Join();
+            _readThread = null;
 
-            RtMidiDll.InFree(_rtmidi);
-            _rtmidi = null;
+            _portHandle?.Dispose();
+            _portHandle = null;
 
             foreach (var channel in _channels)
-                channel?.Dispose();
+                DisposeChannel(channel);
 
-            _mainDevice.Dispose();
-            System.GC.SuppressFinalize(this);
+            DisposeChannel(_allChannels);
         }
 
-        public void ProcessMessageQueue()
+        private void DisposeChannel(MidiChannel channel)
         {
-            if (_rtmidi == null || !_rtmidi->ok) return;
+            if (channel == null || channel.device == null)
+                return;
 
-            while (true)
+            _backend.QueueDeviceRemove(channel.device);
+        }
+
+        private void ReadThread()
+        {
+            const int retryThreshold = 3;
+            int retryCount = 0;
+
+            const int bufferSize = 1024;
+            byte* message = stackalloc byte[bufferSize];
+
+            for (; _keepReading; Thread.Sleep(1))
             {
-                var size = 4ul;
-                var message = stackalloc byte[(int)size];
+                UIntPtr tmpSize = (UIntPtr)bufferSize;
+                double timestamp = rtmidi_in_get_message(_portHandle, message, ref tmpSize);
+                uint size = (uint)tmpSize;
 
-                var stamp = RtMidiDll.InGetMessage(_rtmidi, message, ref size);
-                if (size != 3) break;
-
-                var status = message[0] >> 4;
-                var channel = message[0] & 0xf;
-                var data1 = message[1];
-                var data2 = message[2];
-
-                if (data1 > 0x7f || data2 > 0x7f) continue; // Invalid data
-
-                var noteOff = (status == 8) || (status == 9 && data2 == 0);
-
-                if (status == 9 && !noteOff)
+                if (!_portHandle.Ok)
                 {
-                    _mainDevice.ProcessNoteOn(data1, data2);
-                    GetChannelDevice(channel).ProcessNoteOn(data1, data2);
+                    Debug.LogError($"Failed to read MIDI message: {_portHandle.ErrorMessage}");
+                    if (++retryCount >= retryThreshold)
+                        break;
+                    continue;
                 }
-                else if (noteOff)
+
+                if (size < 1)
+                    continue;
+
+                var status = (MidiStatus)(message[0] >> 4);
+                byte arg = (byte)(message[0] & 0x0F);
+                HandleStatus(status, arg, message + 1, size - 1);
+            }
+        }
+
+        private void HandleStatus(MidiStatus status, byte arg, byte* buffer, uint length)
+        {
+            switch (status)
+            {
+                case MidiStatus.NoteOn:
                 {
-                    _mainDevice.ProcessNoteOff(data1);
-                    GetChannelDevice(channel).ProcessNoteOff(data1);
+                    if (length < 2)
+                        break;
+
+                    byte channel = arg;
+                    byte note = buffer[0];
+                    byte velocity = buffer[1];
+
+                    // Velocity 0 is equivalent to a note off
+                    if (velocity == 0)
+                        goto case MidiStatus.NoteOff;
+
+                    _allChannels.ProcessNoteOn(note, velocity);
+                    GetChannelDevice(channel).ProcessNoteOn(note, velocity);
+                    break;
                 }
-                else if (status == 0xb)
+                case MidiStatus.NoteOff:
                 {
-                    _mainDevice.ProcessControlChange(data1, data2);
-                    GetChannelDevice(channel).ProcessControlChange(data1, data2);
+                    if (length < 2)
+                        break;
+
+                    byte channel = arg;
+                    byte note = buffer[0];
+                    // byte velocity = buffer[1];
+
+                    _allChannels.ProcessNoteOff(note);
+                    GetChannelDevice(channel).ProcessNoteOff(note);
+                    break;
+                }
+                case MidiStatus.ControlChange:
+                {
+                    if (length < 2)
+                        break;
+
+                    int channel = arg;
+                    byte control = buffer[0];
+                    byte value = buffer[1];
+
+                    _allChannels.ProcessControlChange(control, value);
+                    GetChannelDevice(channel).ProcessControlChange(control, value);
+                    break;
                 }
             }
         }
 
-        #endregion
+        private MidiChannel GetChannelDevice(int channel)
+        {
+            if (_channels[channel] == null)
+                _channels[channel] = new MidiChannel(_backend, this, channel);
+
+            return _channels[channel];
+        }
     }
 }

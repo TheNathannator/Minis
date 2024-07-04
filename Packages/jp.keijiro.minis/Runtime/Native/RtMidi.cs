@@ -17,7 +17,10 @@ namespace Minis.Native
 
         public override bool IsInvalid => handle == IntPtr.Zero;
 
-        public bool Ok => !IsInvalid && ((RtMidiWrapper*)handle)->ok;
+        private RtMidiWrapper* Ptr => (RtMidiWrapper*)handle;
+
+        public bool Ok => !IsInvalid && Ptr->ok;
+        public string ErrorMessage => !IsInvalid ? Marshal.PtrToStringAnsi(Ptr->msg) : null;
 
         protected RtMidiHandle(bool ownsHandle)
             : base(IntPtr.Zero, ownsHandle)

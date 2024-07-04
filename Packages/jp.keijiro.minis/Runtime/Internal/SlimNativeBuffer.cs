@@ -4,6 +4,7 @@ using Unity.Collections.LowLevel.Unsafe;
 
 namespace Minis
 {
+    // Borrowed from https://github.com/TheNathannator/HIDrogen
     /// <summary>
     /// A slim, no-nonsense implementation for a buffer of native memory.
     /// </summary>

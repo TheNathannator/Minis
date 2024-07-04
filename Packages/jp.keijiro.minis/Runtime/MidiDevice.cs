@@ -1,10 +1,17 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Layouts;
 
 namespace Minis
 {
+    [Serializable]
+    internal class MidiDeviceCapabilities
+    {
+        public int channel;
+    }
+
     //
     // Custom input device class that processes input from a MIDI channel
     //
@@ -130,11 +137,19 @@ namespace Minis
                 _controls[i] = GetChildControl<MidiValueControl>("control" + i.ToString("D3"));
             }
 
-            // MIDI channel number determination
-            // Here is a dirty trick: Parse the last two characters in the product
-            // name and use it as a channel number.
-            var product = description.product;
-            channel = int.Parse(product.Substring(product.Length - 2));
+            // Retrieve capability info
+            var capabilities = new MidiDeviceCapabilities()
+            {
+                channel = -1, // Default for the all-channel device
+            };
+
+            try
+            {
+                JsonUtility.FromJsonOverwrite(description.capabilities, capabilities);
+            }
+            catch {}
+
+            channel = capabilities.channel;
         }
 
         public static MidiDevice current { get; private set; }

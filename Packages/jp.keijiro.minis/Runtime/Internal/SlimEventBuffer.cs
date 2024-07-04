@@ -8,6 +8,7 @@ using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
 {
+    // Borrowed from https://github.com/TheNathannator/HIDrogen
     /// <summary>
     /// A buffer of memory holding a sequence of <see cref="InputEvent">input events</see>.
     /// Heavily modified and slimmed down from <see cref="InputEventBuffer"/>.

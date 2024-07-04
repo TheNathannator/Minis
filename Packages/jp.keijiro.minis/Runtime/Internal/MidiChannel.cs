@@ -1,32 +1,62 @@
 using System;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Layouts;
 using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
 {
-    //
-    // MIDI device driver class that manages all MIDI ports (interfaces) found
-    // in the system.
-    //
-    sealed class MidiChannel : IDisposable
+    /// <summary>
+    /// A single channel output on a MIDI device.
+    /// </summary>
+    internal sealed class MidiChannel : IDisposable
     {
-        private readonly ThreadedMidiDevice _device;
+        private MidiBackend _backend;
+        private MidiPort _port;
+        private InputDevice _device;
 
-        private bool[] _activeNotes = new bool[128];
+        public readonly int channelNumber;
+        public InputDevice device => _device;
 
-        public MidiChannel(ThreadedMidiDevice pending)
+        private readonly bool[] _activeNotes = new bool[128];
+
+        public MidiChannel(MidiBackend backend, MidiPort port, int channel)
         {
-            _device = pending;
+            _backend = backend;
+            _port = port;
+            channelNumber = channel;
+
+            var description = new InputDeviceDescription()
+            {
+                interfaceName = "Minis",
+            };
+
+            if (channel < 0)
+            {
+                description.product = _port.name + " (All Channels)";
+            }
+            else
+            {
+                description.product = _port.name + " Channel " + channel;
+                description.capabilities = "{\"channel\":" + channel + "}";
+            }
+
+            _backend.QueueDeviceAdd(description, this);
         }
 
-        public void Dispose()
+        // Only exists so we can avoid allocating an extra object for the add context
+        void IDisposable.Dispose() {}
+
+        public void OnAdded(InputDevice device)
         {
-            if (_device.device != null)
-                MidiSystemWrangler.QueueDeviceRemoval(_device);
+            _device = device;
         }
 
-        #region MIDI event receiver (invoked from MidiPort)
+        public void OnRemoved()
+        {
+            _device = null;
+        }
 
-        internal void ProcessNoteOn(byte note, byte velocity)
+        public void ProcessNoteOn(byte note, byte velocity)
         {
             // Consecutive note ons need to have a note off inserted in-between
             if (_activeNotes[note])
@@ -36,26 +66,25 @@ namespace Minis
             _activeNotes[note] = true;
         }
 
-        internal void ProcessNoteOff(byte note)
+        public void ProcessNoteOff(byte note)
         {
             SendDeltaEvent(note, 0);
             _activeNotes[note] = false;
         }
 
-        internal void ProcessControlChange(byte number, byte value)
+        public void ProcessControlChange(byte number, byte value)
         {
             SendDeltaEvent(number + 128u, value);
         }
 
-        unsafe void SendDeltaEvent(uint offset, byte value)
+        private unsafe void SendDeltaEvent(uint offset, byte value)
         {
-            if (_device.device == null)
+            if (_device == null)
                 return;
 
-            var device = _device.device;
             var delta = new DeltaStateEvent()
             {
-                baseEvent = new InputEvent(DeltaStateEvent.Type, sizeof(DeltaStateEvent), device.deviceId),
+                baseEvent = new InputEvent(DeltaStateEvent.Type, sizeof(DeltaStateEvent), _device.deviceId),
                 stateFormat = MidiDeviceState.Format,
                 stateOffset = offset
             };
@@ -63,9 +92,7 @@ namespace Minis
             // DeltaStateEvent always contains one byte in its state data as a field
             *(byte*)delta.deltaState = value;
 
-            MidiSystemWrangler.QueueEvent(&delta.baseEvent);
+            _backend.QueueEvent(&delta.baseEvent);
         }
-
-        #endregion
     }
 }
