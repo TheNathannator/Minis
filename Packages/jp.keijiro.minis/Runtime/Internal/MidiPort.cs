@@ -49,7 +49,7 @@ namespace Minis
             {
                 string error = _portHandle.ErrorMessage;
                 _portHandle.Dispose();
-                throw new Exception($"Failed to open port {portNumber}: {error}");
+                throw new Exception($"Failed to open RtMidi port {portNumber}: {error}");
             }
 
             _allChannels = new MidiChannel(_backend, this, -1);
