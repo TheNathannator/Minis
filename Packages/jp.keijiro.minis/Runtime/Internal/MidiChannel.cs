@@ -68,7 +68,7 @@ namespace Minis
 
         public void ProcessNoteOff(byte note)
         {
-            SendDeltaEvent(MidiDeviceState.NoteOffset + note, 0);
+            SendDeltaEvent(MidiDeviceState.NoteOffset + note, (byte)0);
             _activeNotes[note] = false;
         }
 
