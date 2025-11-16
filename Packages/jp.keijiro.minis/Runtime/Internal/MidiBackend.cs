@@ -30,12 +30,16 @@ namespace Minis
 
         protected override void OnDispose()
         {
+            _rtMidi?.Dispose();
+            _rtMidi = null;
+        }
+
+        protected override void OnStop()
+        {
             foreach (var port in _ports)
                 port?.Dispose();
             _ports.Clear();
-
-            _rtMidi?.Dispose();
-            _rtMidi = null;
+            _lastPortCount = 0;
         }
 
         protected override void OnUpdate()

@@ -41,9 +41,13 @@ namespace Minis
 
                 // Backend
                 _backend = new MidiBackend();
+                _backend.Start();
             }
             catch (Exception ex)
             {
+                _backend?.Dispose();
+                _backend = null;
+
                 Debug.LogError("[Minis] Failed to initialize backends!");
                 Debug.LogException(ex);
             }
@@ -61,6 +65,7 @@ namespace Minis
             try
             {
                 _backend?.Dispose();
+                _backend = null;
             }
             catch (Exception ex)
             {
