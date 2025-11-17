@@ -33,7 +33,7 @@ namespace Minis
         private readonly MidiChannel[] _channels = new MidiChannel[16];
 
         private Thread _readThread;
-        private volatile bool _keepReading = true;
+        private EventWaitHandle m_ThreadStop = new EventWaitHandle(false, EventResetMode.ManualReset);
 
         public MidiPort(MidiBackend backend, uint portNumber)
         {
@@ -60,9 +60,13 @@ namespace Minis
 
         public void Dispose()
         {
-            _keepReading = false;
+            m_ThreadStop?.Set();
+
             _readThread?.Join();
             _readThread = null;
+
+            m_ThreadStop?.Dispose();
+            m_ThreadStop = null;
 
             _portHandle?.Dispose();
             _portHandle = null;
@@ -89,7 +93,7 @@ namespace Minis
             const int bufferSize = 1024;
             byte* message = stackalloc byte[bufferSize];
 
-            for (; _keepReading; Thread.Sleep(1))
+            while (!m_ThreadStop.WaitOne(1))
             {
                 UIntPtr tmpSize = (UIntPtr)bufferSize;
                 double timestamp = rtmidi_in_get_message(_portHandle, message, ref tmpSize);
