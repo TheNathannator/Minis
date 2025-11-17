@@ -11,7 +11,6 @@ namespace Minis
     internal sealed class MidiChannel : IDisposable
     {
         private MidiBackend _backend;
-        private MidiPort _port;
         private InputDevice _device;
 
         public readonly int channelNumber;
@@ -19,10 +18,9 @@ namespace Minis
 
         private readonly bool[] _activeNotes = new bool[128];
 
-        public MidiChannel(MidiBackend backend, MidiPort port, int channel)
+        public MidiChannel(MidiBackend backend, string portName, int channel)
         {
             _backend = backend;
-            _port = port;
             channelNumber = channel;
 
             var description = new InputDeviceDescription()
@@ -32,11 +30,11 @@ namespace Minis
 
             if (channel < 0)
             {
-                description.product = _port.name + " (All Channels)";
+                description.product = portName + " (All Channels)";
             }
             else
             {
-                description.product = _port.name + " Channel " + channel;
+                description.product = portName + " Channel " + channel;
                 description.capabilities = "{\"channel\":" + channel + "}";
             }
 

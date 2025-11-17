@@ -27,7 +27,7 @@ namespace Minis
         private readonly MidiBackend _backend;
 
         private RtMidiInHandle _portHandle;
-        public readonly string name;
+        private readonly string _name;
 
         private MidiChannel _allChannels;
         private readonly MidiChannel[] _channels = new MidiChannel[16];
@@ -43,7 +43,6 @@ namespace Minis
             if (_portHandle == null || _portHandle.IsInvalid)
                 throw new Exception("Failed to create RtMidi handle!");
 
-            name = rtmidi_get_port_name(_portHandle, portNumber);
             rtmidi_open_port(_portHandle, portNumber, "RtMidi Input");
             if (!_portHandle.Ok)
             {
@@ -52,7 +51,14 @@ namespace Minis
                 throw new Exception($"Failed to open RtMidi port {portNumber}: {error}");
             }
 
-            _allChannels = new MidiChannel(_backend, this, -1);
+            _name = rtmidi_get_port_name(_portHandle, portNumber);
+            if (!_portHandle.Ok)
+            {
+                _portHandle.Dispose();
+                throw new Exception($"Failed to get port name: {_portHandle.ErrorMessage}");
+            }
+
+            _allChannels = new MidiChannel(_backend, _name, -1);
 
             _readThread = new Thread(ReadThread) { IsBackground = true };
             _readThread.Start();
@@ -186,7 +192,7 @@ namespace Minis
         private MidiChannel GetChannelDevice(int channel)
         {
             if (_channels[channel] == null)
-                _channels[channel] = new MidiChannel(_backend, this, channel);
+                _channels[channel] = new MidiChannel(_backend, _name, channel);
 
             return _channels[channel];
         }
