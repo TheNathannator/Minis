@@ -141,10 +141,15 @@ namespace Minis
 
                     // Velocity 0 is equivalent to a note off
                     if (velocity == 0)
-                        goto case MidiStatus.NoteOff;
-
-                    _allChannels.ProcessNoteOn(note, velocity);
-                    GetChannelDevice(channel).ProcessNoteOn(note, velocity);
+                    {
+                        _allChannels.ProcessNoteOff(note);
+                        GetChannelDevice(channel).ProcessNoteOff(note);
+                    }
+                    else
+                    {
+                        _allChannels.ProcessNoteOn(note, velocity);
+                        GetChannelDevice(channel).ProcessNoteOn(note, velocity);
+                    }
                     break;
                 }
                 case MidiStatus.NoteOff:
@@ -181,9 +186,10 @@ namespace Minis
                     int channel = arg;
                     byte lsb = buffer[0];
                     byte msb = buffer[1];
+                    ushort value = (ushort)((msb << 7) | lsb);
 
-                    _allChannels.ProcessPitchBend(msb, lsb);
-                    GetChannelDevice(channel).ProcessPitchBend(msb, lsb);
+                    _allChannels.ProcessPitchBend(value);
+                    GetChannelDevice(channel).ProcessPitchBend(value);
                     break;
                 }
             }

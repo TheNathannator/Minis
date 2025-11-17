@@ -75,9 +75,8 @@ namespace Minis
             SendDeltaEvent(MidiDeviceState.ControlOffset + number, value);
         }
 
-        public void ProcessPitchBend(byte msb, byte lsb)
+        public void ProcessPitchBend(ushort value)
         {
-            ushort value = (ushort)((msb << 7) | lsb);
             SendDeltaEvent(MidiDeviceState.PitchBendOffset, value);
         }
 
