@@ -8,18 +8,6 @@ using static Minis.Native.RtMidi;
 
 namespace Minis
 {
-    internal enum MidiStatus
-    {
-        NoteOff = 0x8,
-        NoteOn = 0x9,
-        NotePressure = 0xA,
-        ControlChange = 0xB,
-        ProgramChange = 0xC,
-        ChannelPressure = 0xD,
-        PitchBend = 0xE,
-        System = 0xF,
-    }
-
     /// <summary>
     /// A MIDI device, as reported by RtMidi.
     /// </summary>
@@ -181,24 +169,35 @@ namespace Minis
                 if (size < 1)
                     continue;
 
-                var status = (MidiStatus)(message[0] >> 4);
-                byte arg = (byte)(message[0] & 0x0F);
-                HandleStatus(status, arg, message + 1, size - 1);
+                HandleStatus(message[0], message + 1, size - 1);
             }
 
             m_ThreadStop.Set();
         }
 
-        private void HandleStatus(MidiStatus status, byte arg, byte* buffer, uint length)
+        private void HandleStatus(byte status, byte* buffer, uint length)
         {
-            switch (status)
+            switch (status & 0xF0)
             {
-                case MidiStatus.NoteOn:
+                case 0x80: // Note off
                 {
                     if (length < 2)
                         break;
 
-                    byte channel = arg;
+                    int channel = status & 0x0F;
+                    byte note = buffer[0];
+                    // byte velocity = buffer[1];
+
+                    _allChannels.ProcessNoteOff(note);
+                    GetChannelDevice(channel).ProcessNoteOff(note);
+                    break;
+                }
+                case 0x90: // Note on
+                {
+                    if (length < 2)
+                        break;
+
+                    int channel = status & 0x0F;
                     byte note = buffer[0];
                     byte velocity = buffer[1];
 
@@ -215,25 +214,12 @@ namespace Minis
                     }
                     break;
                 }
-                case MidiStatus.NoteOff:
+                case 0xB0: // Control change
                 {
                     if (length < 2)
                         break;
 
-                    byte channel = arg;
-                    byte note = buffer[0];
-                    // byte velocity = buffer[1];
-
-                    _allChannels.ProcessNoteOff(note);
-                    GetChannelDevice(channel).ProcessNoteOff(note);
-                    break;
-                }
-                case MidiStatus.ControlChange:
-                {
-                    if (length < 2)
-                        break;
-
-                    int channel = arg;
+                    int channel = status & 0x0F;
                     byte control = buffer[0];
                     byte value = buffer[1];
 
@@ -272,12 +258,12 @@ namespace Minis
                     }
                     break;
                 }
-                case MidiStatus.PitchBend:
+                case 0xE0: // Pitch bend
                 {
                     if (length < 2)
                         break;
 
-                    int channel = arg;
+                    int channel = status & 0x0F;
                     byte lsb = buffer[0];
                     byte msb = buffer[1];
                     ushort value = (ushort)((msb << 7) | lsb);
