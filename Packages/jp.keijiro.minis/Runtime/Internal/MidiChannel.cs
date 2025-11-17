@@ -11,10 +11,10 @@ namespace Minis
     internal sealed class MidiChannel : IDisposable
     {
         private MidiBackend _backend;
-        private InputDevice _device;
+        private MidiDevice _device;
 
         public readonly int channelNumber;
-        public InputDevice device => _device;
+        public MidiDevice device => _device;
 
         private readonly bool[] _activeNotes = new bool[128];
 
@@ -46,7 +46,7 @@ namespace Minis
 
         public void OnAdded(InputDevice device)
         {
-            _device = device;
+            _device = (MidiDevice)device;
         }
 
         public void OnRemoved()
@@ -56,50 +56,41 @@ namespace Minis
 
         public void ProcessNoteOn(byte note, byte velocity)
         {
+            if (_device == null)
+                return;
+
             // Consecutive note ons need to have a note off inserted in-between
             if (_activeNotes[note])
                 ProcessNoteOff(note);
 
-            SendDeltaEvent(note, velocity);
+            _backend.QueueDeltaStateEvent(_device.GetNote(note), ref velocity);
             _activeNotes[note] = true;
         }
 
         public void ProcessNoteOff(byte note)
         {
-            SendDeltaEvent(MidiDeviceState.NoteOffset + note, (byte)0);
+            if (_device == null)
+                return;
+
+            byte velocity = 0;
+            _backend.QueueDeltaStateEvent(_device.GetNote(note), ref velocity);
             _activeNotes[note] = false;
         }
 
-        public void ProcessControlChange(byte number, byte value)
-        {
-            SendDeltaEvent(MidiDeviceState.ControlOffset + number, value);
-        }
-
-        public void ProcessPitchBend(ushort value)
-        {
-            SendDeltaEvent(MidiDeviceState.PitchBendOffset, value);
-        }
-
-        private unsafe void SendDeltaEvent<T>(uint offset, T value)
-            where T : unmanaged
+        public void ProcessControlChange(byte cc, byte value)
         {
             if (_device == null)
                 return;
 
-            // DeltaStateEvent already includes one byte of state data
-            int eventSize = sizeof(DeltaStateEvent) - 1 + sizeof(T);
-            byte* _delta = stackalloc byte[eventSize];
-            var delta = (DeltaStateEvent*)_delta;
+            _backend.QueueDeltaStateEvent(_device.GetCC(cc), ref value);
+        }
 
-            *delta = new DeltaStateEvent()
-            {
-                baseEvent = new InputEvent(DeltaStateEvent.Type, eventSize, _device.deviceId),
-                stateFormat = MidiDeviceState.Format,
-                stateOffset = offset
-            };
-            *(T*)delta->deltaState = value;
+        public void ProcessPitchBend(ushort value)
+        {
+            if (_device == null)
+                return;
 
-            _backend.QueueEvent(&delta->baseEvent);
+            _backend.QueueDeltaStateEvent(_device.pitchBend, ref value);
         }
     }
 }

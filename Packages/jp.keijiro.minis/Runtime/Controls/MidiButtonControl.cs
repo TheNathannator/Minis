@@ -5,33 +5,32 @@ using UnityEngine.InputSystem.LowLevel;
 namespace Minis
 {
     /// <summary>
-    /// The pitch bend input on a MIDI device.
+    /// A note input on a MIDI device.
     /// </summary>
-    public class MidiPitchControl : AxisControl
+    public class MidiButtonControl : ButtonControl
     {
-        private int _minValue = 0;
-        private int _maxValue = 0;
-        private int _zeroPoint = 0;
+        public int minValue = 0;
+        public int maxValue = 127;
+        public int zeroPoint = 0;
 
         internal static void Initialize()
         {
-            InputSystem.RegisterLayout<MidiPitchControl>("MidiPitch");
+            InputSystem.RegisterLayout<MidiButtonControl>("MidiButton");
         }
 
-        public MidiPitchControl()
+        public MidiButtonControl()
         {
             m_StateBlock.format = InputStateBlock.FormatBit;
-            m_StateBlock.sizeInBits = 14;
+            m_StateBlock.sizeInBits = 7;
 
-            _minValue = 0;
-            _maxValue = 0x3FFF;
-            _zeroPoint = 0x2000;
+            // ButtonControl parameters
+            pressPoint = 1.0f / 127;
         }
 
         public override unsafe float ReadUnprocessedValueFromState(void* statePtr)
         {
             int value = stateBlock.ReadInt(statePtr);
-            return Normalize(value, _minValue, _maxValue, _zeroPoint);
+            return Normalize(value, minValue, maxValue, zeroPoint);
         }
 
         // Borrowed from PlasticBand's IntegerAxisControl

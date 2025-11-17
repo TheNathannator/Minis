@@ -34,9 +34,8 @@ namespace Minis
             try
             {
                 // Layouts
-                MidiNoteControl.Initialize();
-                MidiValueControl.Initialize();
-                MidiPitchControl.Initialize();
+                MidiButtonControl.Initialize();
+                MidiAxisControl.Initialize();
                 MidiDevice.Initialize();
 
                 // Backend

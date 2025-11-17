@@ -232,7 +232,41 @@ namespace Minis
             UnsafeUtility.MemCpy(stateEvent->state, stateBuffer, stateLength);
 
             // Queue state event
-            QueueEvent((InputEvent*)stateEvent);
+            QueueEvent(&stateEvent->baseEvent);
+        }
+
+        // Based on InputSystem.QueueDeltaStateEvent<T>
+        public unsafe void QueueDeltaStateEvent<TValue>(InputControl control, ref TValue value)
+            where TValue : unmanaged
+        {
+            QueueDeltaStateEvent(control, UnsafeUtility.AddressOf(ref value), sizeof(TValue));
+        }
+
+        public unsafe void QueueDeltaStateEvent(InputControl control, void* stateBuffer, int stateLength)
+        {
+            if (stateBuffer == null || stateLength < 1 || stateLength > kMaxStateSize)
+            {
+                return;
+            }
+
+            var device = control.device;
+
+            // Create state buffer
+            int eventSize = stateLength + (sizeof(DeltaStateEvent) - 1); // DeltaStateEvent already includes 1 byte at the end
+            byte* _deltaEvent = stackalloc byte[eventSize];
+            var deltaEvent = (DeltaStateEvent*)_deltaEvent;
+
+            *deltaEvent = new DeltaStateEvent()
+            {
+                baseEvent = new InputEvent(DeltaStateEvent.Type, eventSize, device.deviceId),
+                stateFormat = MidiDeviceState.Format,
+                stateOffset = control.stateBlock.byteOffset - device.stateBlock.byteOffset
+            };
+
+            // Copy state data
+            UnsafeUtility.MemCpy(deltaEvent->deltaState, stateBuffer, stateLength);
+
+            QueueEvent(&deltaEvent->baseEvent);
         }
     }
 
