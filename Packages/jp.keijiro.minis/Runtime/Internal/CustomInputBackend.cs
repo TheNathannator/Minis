@@ -18,6 +18,10 @@ namespace Minis
         // (InputSystem.StateEventBuffer.kMaxSize)
         protected const int kMaxStateSize = 512;
 
+        // Queue for devices; they must be managed on the main thread
+        internal readonly ConcurrentBag<(InputDeviceDescription description, IDisposable context)> m_AdditionQueue
+            = new ConcurrentBag<(InputDeviceDescription, IDisposable)>();
+
         // We use a custom buffering implementation because the built-in implementation is
         // not friendly to managed threads, despite what the docs for InputSystem.QueueEvent/QueueStateEvent
         // may claim, so we need to flush events on the main thread.
@@ -87,6 +91,12 @@ namespace Minis
 
                 try
                 {
+                    while (m_AdditionQueue.TryTake(out var pair))
+                    {
+                        pair.context?.Dispose();
+                    }
+
+                    InternalOnStop();
                     OnStop();
                 }
                 catch (Exception ex)
@@ -99,6 +109,11 @@ namespace Minis
 
         private void Update()
         {
+            while (m_AdditionQueue.TryTake(out var context))
+            {
+                AddDevice(context.description, context.context);
+            }
+
             OnUpdate();
             FlushEventBuffer();
         }
@@ -108,8 +123,22 @@ namespace Minis
         protected virtual void OnStop() {}
         protected virtual void OnUpdate() {}
 
+        protected abstract void InternalOnStop();
+
+        protected abstract void AddDevice(InputDeviceDescription description, IDisposable context);
         protected abstract void OnDeviceChange(InputDevice device, InputDeviceChange change);
         protected abstract unsafe long? OnDeviceCommand(InputDevice device, InputDeviceCommand* command);
+
+        public void QueueDeviceAdd(InputDeviceDescription description, IDisposable context)
+        {
+            m_AdditionQueue.Add((description, context));
+        }
+
+        public void QueueDeviceRemove(InputDevice device)
+        {
+            var removeEvent = DeviceRemoveEvent.Create(device.deviceId);
+            QueueEvent(ref removeEvent);
+        }
 
         private void FlushEventBuffer()
         {
@@ -210,21 +239,12 @@ namespace Minis
     internal abstract class CustomInputBackend<TBackendDevice> : CustomInputBackend
         where TBackendDevice : class
     {
-        // Queue for devices; they must be managed on the main thread
-        private readonly ConcurrentBag<(InputDeviceDescription description, IDisposable context)> m_AdditionQueue
-            = new ConcurrentBag<(InputDeviceDescription, IDisposable)>();
-
         // Available devices by InputSystem device ID
         private readonly Dictionary<InputDevice, TBackendDevice> m_DeviceLookup
             = new Dictionary<InputDevice, TBackendDevice>();
 
-        protected override void OnStop()
+        protected sealed override void InternalOnStop()
         {
-            while (m_AdditionQueue.TryTake(out var pair))
-            {
-                pair.context?.Dispose();
-            }
-
             foreach (var pair in m_DeviceLookup)
             {
                 OnDeviceRemoved(pair.Value);
@@ -233,26 +253,7 @@ namespace Minis
             m_DeviceLookup.Clear();
         }
 
-        protected override void OnUpdate()
-        {
-            while (m_AdditionQueue.TryTake(out var context))
-            {
-                AddDevice(context.description, context.context);
-            }
-        }
-
-        public void QueueDeviceAdd(InputDeviceDescription description, IDisposable context)
-        {
-            m_AdditionQueue.Add((description, context));
-        }
-
-        public void QueueDeviceRemove(InputDevice device)
-        {
-            var removeEvent = DeviceRemoveEvent.Create(device.deviceId);
-            QueueEvent(ref removeEvent);
-        }
-
-        private void AddDevice(InputDeviceDescription description, IDisposable context)
+        protected sealed override void AddDevice(InputDeviceDescription description, IDisposable context)
         {
             using (context)
             {
@@ -261,11 +262,6 @@ namespace Minis
                 try
                 {
                     device = InputSystem.AddDevice(description);
-                }
-                catch (ArgumentException)
-                {
-                    // Ignore layout-not-found exception
-                    return;
                 }
                 catch (Exception ex)
                 {
