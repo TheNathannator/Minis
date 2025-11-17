@@ -171,7 +171,7 @@ namespace Minis
 
                     if (!_portHandle.Ok)
                     {
-                        Debug.LogError($"Failed to read MIDI message: {_portHandle.ErrorMessage}");
+                        Debug.LogError($"[Minis] Failed to read MIDI message: {_portHandle.ErrorMessage}");
                         if (++retryCount >= retryThreshold)
                             break;
                         continue;
@@ -237,8 +237,39 @@ namespace Minis
                     byte control = buffer[0];
                     byte value = buffer[1];
 
-                    _allChannels.ProcessControlChange(control, value);
-                    GetChannelDevice(channel).ProcessControlChange(control, value);
+                    switch (control)
+                    {
+                        // CC 120-127 are channel mode messages
+                        case 120: // All Sound Off
+                        case 123: // All Notes Off
+                        case 124: // Omni Off
+                        case 125: // Omni On
+                        case 126: // Mono On
+                        case 127: // Poly On
+                        {
+                            // All of the above messages reset all notes
+                            _allChannels.ResetAllNotes();
+                            GetChannelDevice(channel).ResetAllNotes();
+                            break;
+                        }
+                        case 121: // Reset All Controllers
+                        {
+                            _allChannels.ResetAllCC();
+                            GetChannelDevice(channel).ResetAllCC();
+                            break;
+                        }
+                        case 122: // Local Control
+                        {
+                            // Not necessary to handle, ignore
+                            break;
+                        }
+                        default:
+                        {
+                            _allChannels.ProcessCC(control, value);
+                            GetChannelDevice(channel).ProcessCC(control, value);
+                            break;
+                        }
+                    }
                     break;
                 }
                 case MidiStatus.PitchBend:

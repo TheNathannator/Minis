@@ -1,7 +1,6 @@
 using System;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Layouts;
-using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
 {
@@ -77,7 +76,7 @@ namespace Minis
             _activeNotes[note] = false;
         }
 
-        public void ProcessControlChange(byte cc, byte value)
+        public void ProcessCC(byte cc, byte value)
         {
             if (_device == null)
                 return;
@@ -91,6 +90,31 @@ namespace Minis
                 return;
 
             _backend.QueueDeltaStateEvent(_device.pitchBend, ref value);
+        }
+
+        public void ResetAllNotes()
+        {
+            if (_device == null)
+                return;
+
+            for (byte note = 0; note < 128; note++)
+            {
+                byte velocity = 0;
+                _backend.QueueDeltaStateEvent(_device.GetNote(note), ref velocity);
+                _activeNotes[note] = false;
+            }
+        }
+
+        public void ResetAllCC()
+        {
+            if (_device == null)
+                return;
+
+            for (byte cc = 0; cc < 120; cc++)
+            {
+                byte value = 0;
+                _backend.QueueDeltaStateEvent(_device.GetCC(cc), ref value);
+            }
         }
     }
 }

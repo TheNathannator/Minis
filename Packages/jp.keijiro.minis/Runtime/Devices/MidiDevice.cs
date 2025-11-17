@@ -42,7 +42,7 @@ namespace Minis
         public int channel { get; private set; }
 
         private MidiButtonControl[] _notes;
-        private MidiAxisControl[] _controls;
+        private MidiAxisControl[] _cc;
 
         public MidiAxisControl pitchBend { get; private set; }
 
@@ -52,7 +52,7 @@ namespace Minis
 
         // Get an input control object bound for a specific control element (CC).
         public MidiAxisControl GetCC(int controlNumber)
-            => _controls[controlNumber];
+            => _cc[controlNumber];
 
         protected override void FinishSetup()
         {
@@ -60,12 +60,15 @@ namespace Minis
 
             // Populate the input controls.
             _notes = new MidiButtonControl[128];
-            _controls = new MidiAxisControl[128];
-
             for (var i = 0; i < 128; i++)
             {
                 _notes[i] = GetChildControl<MidiButtonControl>("note" + i.ToString("D3"));
-                _controls[i] = GetChildControl<MidiAxisControl>("control" + i.ToString("D3"));
+            }
+
+            _cc = new MidiAxisControl[120];
+            for (var i = 0; i < 120; i++)
+            {
+                _cc[i] = GetChildControl<MidiAxisControl>("cc" + i.ToString("D3"));
             }
 
             pitchBend = GetChildControl<MidiAxisControl>("pitchBend");
