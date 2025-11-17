@@ -1,7 +1,6 @@
 {
   "author": "Keijiro Takahashi",
   "dependencies": {
-    "jp.keijiro.rtmidi": "1.0.4",
     "com.unity.inputsystem": "1.0.1"
   },
   "description": "Minis: MIDI Input plugin for Unity New Input System",
