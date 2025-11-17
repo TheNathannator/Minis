@@ -45,6 +45,7 @@ namespace Minis
         private MidiAxisControl[] _cc;
 
         public MidiAxisControl pitchBend { get; private set; }
+        public MidiAxisControl channelPressure { get; private set; }
 
         // Get an input control object bound for a specific note.
         public MidiButtonControl GetNote(int noteNumber)
@@ -72,6 +73,7 @@ namespace Minis
             }
 
             pitchBend = GetChildControl<MidiAxisControl>("pitchBend");
+            channelPressure = GetChildControl<MidiAxisControl>("channelPressure");
 
             // Retrieve capability info
             var capabilities = new MidiDeviceCapabilities()

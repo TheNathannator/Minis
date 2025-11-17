@@ -76,6 +76,15 @@ namespace Minis
             _activeNotes[note] = false;
         }
 
+        public void ProcessNotePressure(byte note, byte velocity)
+        {
+            if (_device == null)
+                return;
+
+            velocity = Math.Max(velocity, (byte)1);
+            _backend.QueueDeltaStateEvent(_device.GetNote(note), ref velocity);
+        }
+
         public void ProcessCC(byte cc, byte value)
         {
             if (_device == null)
@@ -90,6 +99,14 @@ namespace Minis
                 return;
 
             _backend.QueueDeltaStateEvent(_device.pitchBend, ref value);
+        }
+
+        public void ProcessChannelPressure(byte value)
+        {
+            if (_device == null)
+                return;
+
+            _backend.QueueDeltaStateEvent(_device.channelPressure, ref value);
         }
 
         public void ResetAllNotes()

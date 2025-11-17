@@ -271,5 +271,8 @@ namespace Minis
         // [InputControl(name = "pitchBend", displayName = "Pitch Bend", shortDisplayName = "Pitch", layout = "MidiPitch", defaultState = (ushort)8192)]
         [InputControl(name = "pitchBend", displayName = "Pitch Bend", shortDisplayName = "P.Bend", layout = "MidiAxis", format = "BIT", sizeInBits = 14, parameters = "minValue=0,maxValue=16383,zeroPoint=8192", defaultState = (ushort)8192)]
         public ushort pitchBend;
+
+        [InputControl(name = "channelPressure", displayName = "Channel Pressure", shortDisplayName = "Ch.Press", layout = "MidiAxis")]
+        public byte channelPressure;
     }
 }

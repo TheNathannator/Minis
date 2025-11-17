@@ -214,6 +214,19 @@ namespace Minis
                     }
                     break;
                 }
+                case 0xA0: // Note pressure
+                {
+                    if (length < 2)
+                        break;
+
+                    int channel = status & 0x0F;
+                    byte note = buffer[0];
+                    byte velocity = buffer[1];
+
+                    _allChannels.ProcessNotePressure(note, velocity);
+                    GetChannelDevice(channel).ProcessNotePressure(note, velocity);
+                    break;
+                }
                 case 0xB0: // Control change
                 {
                     if (length < 2)
@@ -256,6 +269,18 @@ namespace Minis
                             break;
                         }
                     }
+                    break;
+                }
+                case 0xD0: // Channel pressure
+                {
+                    if (length < 2)
+                        break;
+
+                    int channel = status & 0x0F;
+                    byte value = buffer[0];
+
+                    _allChannels.ProcessChannelPressure(value);
+                    GetChannelDevice(channel).ProcessChannelPressure(value);
                     break;
                 }
                 case 0xE0: // Pitch bend
