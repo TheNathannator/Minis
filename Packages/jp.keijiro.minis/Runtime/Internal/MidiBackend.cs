@@ -48,33 +48,49 @@ namespace Minis
             uint portCount = rtmidi_get_port_count(_rtMidi);
             if (!_rtMidi.Ok)
             {
-                Debug.LogError($"Failed to get RtMidi port count: {_rtMidi.ErrorMessage}");
+                Debug.LogError($"[Minis] Failed to get RtMidi port count: {_rtMidi.ErrorMessage}");
+                return;
             }
-            else if (portCount != _lastPortCount)
+
+            if (portCount != _lastPortCount)
             {
-                // Update port count first so we don't repeatedly attempt to open ports that failed
-                _lastPortCount = portCount;
+                RefreshPorts(portCount);
+            }
 
-                // Completely refresh all MIDI devices
-                // Not ideal, but no sane way to track which devices have been added/removed
-                foreach (var port in _ports)
-                    port.Dispose();
-                _ports.Clear();
-
-                for (uint port = 0; port < portCount; port++)
+            foreach (var port in _ports)
+            {
+                if (!port.IsAlive())
                 {
-                    // Attempt port open 3 times
-                    for (int i = 0; i < 3; i++)
+                    RefreshPorts(portCount);
+                    break;
+                }
+            }
+        }
+
+        private void RefreshPorts(uint portCount)
+        {
+            // Update port count first so we don't repeatedly attempt to open ports that failed
+            _lastPortCount = portCount;
+
+            // Completely refresh all MIDI devices
+            // Not ideal, but no sane way to track which devices have been added/removed
+            foreach (var port in _ports)
+                port.Dispose();
+            _ports.Clear();
+
+            for (uint port = 0; port < portCount; port++)
+            {
+                // Attempt port open 3 times
+                for (int i = 0; i < 3; i++)
+                {
+                    try
                     {
-                        try
-                        {
-                            _ports.Add(new MidiPort(this, port));
-                            break;
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogException(ex);
-                        }
+                        _ports.Add(new MidiPort(this, port));
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex);
                     }
                 }
             }

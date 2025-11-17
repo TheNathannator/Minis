@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Minis.Native;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 
 using static Minis.Native.RtMidi;
@@ -27,7 +28,10 @@ namespace Minis
         private readonly MidiBackend _backend;
 
         private RtMidiInHandle _portHandle;
+        private uint _portNumber;
+
         private readonly string _name;
+        private readonly byte[] _nameBytes;
 
         private MidiChannel _allChannels;
         private readonly MidiChannel[] _channels = new MidiChannel[16];
@@ -38,6 +42,7 @@ namespace Minis
         public MidiPort(MidiBackend backend, uint portNumber)
         {
             _backend = backend;
+            _portNumber = portNumber;
 
             _portHandle = rtmidi_in_create_default();
             if (_portHandle == null || _portHandle.IsInvalid)
@@ -51,7 +56,7 @@ namespace Minis
                 throw new Exception($"Failed to open RtMidi port {portNumber}: {error}");
             }
 
-            _name = rtmidi_get_port_name(_portHandle, portNumber);
+            (_name, _nameBytes) = rtmidi_get_port_name(_portHandle, portNumber);
             if (!_portHandle.Ok)
             {
                 _portHandle.Dispose();
@@ -95,6 +100,58 @@ namespace Minis
             _backend.QueueDeviceRemove(channel.device);
         }
 
+        public bool IsAlive()
+        {
+            if (_portHandle == null)
+            {
+                return false;
+            }
+
+            lock (_portHandle)
+            {
+                if (_portHandle.IsInvalid ||
+                    m_ThreadStop == null ||
+                    m_ThreadStop.WaitOne(0))
+                {
+                    return false;
+                }
+
+                if (HasNameChanged())
+                {
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+        private bool HasNameChanged()
+        { 
+            int length = 0;
+            rtmidi_get_port_name(_portHandle, _portNumber, null, ref length);
+            if (!_portHandle.Ok)
+            {
+                return true;
+            }
+
+            if (length != _nameBytes.Length)
+            {
+                return true;
+            }
+
+            byte* buffer = stackalloc byte[length];
+            int result = rtmidi_get_port_name(_portHandle, _portNumber, buffer, ref length);
+            if (!_portHandle.Ok)
+            {
+                return true;
+            }
+
+            fixed (byte* ptr = _nameBytes)
+            {
+                return UnsafeUtility.MemCmp(buffer, ptr, length) != 0;
+            }
+        }
+
         private void ReadThread()
         {
             const int retryThreshold = 3;
@@ -105,16 +162,20 @@ namespace Minis
 
             while (!m_ThreadStop.WaitOne(1))
             {
-                UIntPtr tmpSize = (UIntPtr)bufferSize;
-                double timestamp = rtmidi_in_get_message(_portHandle, message, ref tmpSize);
-                uint size = (uint)tmpSize;
-
-                if (!_portHandle.Ok)
+                uint size;
+                lock (_portHandle)
                 {
-                    Debug.LogError($"Failed to read MIDI message: {_portHandle.ErrorMessage}");
-                    if (++retryCount >= retryThreshold)
-                        break;
-                    continue;
+                    UIntPtr tmpSize = (UIntPtr)bufferSize;
+                    double timestamp = rtmidi_in_get_message(_portHandle, message, ref tmpSize);
+                    size = (uint)tmpSize;
+
+                    if (!_portHandle.Ok)
+                    {
+                        Debug.LogError($"Failed to read MIDI message: {_portHandle.ErrorMessage}");
+                        if (++retryCount >= retryThreshold)
+                            break;
+                        continue;
+                    }
                 }
 
                 if (size < 1)
@@ -124,6 +185,8 @@ namespace Minis
                 byte arg = (byte)(message[0] & 0x0F);
                 HandleStatus(status, arg, message + 1, size - 1);
             }
+
+            m_ThreadStop.Set();
         }
 
         private void HandleStatus(MidiStatus status, byte arg, byte* buffer, uint length)

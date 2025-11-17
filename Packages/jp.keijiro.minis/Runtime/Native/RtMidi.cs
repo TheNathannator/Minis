@@ -156,32 +156,36 @@ namespace Minis.Native
             RtMidiHandle device
         );
 
-        [DllImport(DllName, EntryPoint = "rtmidi_get_port_name")]
+        [DllImport(DllName)]
         [return: MarshalAs(UnmanagedType.LPStr)]
-        private static unsafe extern int _rtmidi_get_port_name(
+        public static unsafe extern int rtmidi_get_port_name(
             RtMidiHandle device,
             uint portNumber,
             byte* bufOut, // char*
             ref int bufLen // int*
         );
 
-        public static unsafe string rtmidi_get_port_name(RtMidiHandle device, uint portNumber)
+        public static unsafe (string, byte[]) rtmidi_get_port_name(RtMidiHandle device, uint portNumber)
         {
             int length = 0;
-            _rtmidi_get_port_name(device, portNumber, null, ref length);
+            rtmidi_get_port_name(device, portNumber, null, ref length);
             if (!device.Ok)
             {
-                return null;
+                return (null, null);
             }
 
-            byte* buffer = stackalloc byte[length];
-            int result = _rtmidi_get_port_name(device, portNumber, null, ref length);
-            if (!device.Ok)
+            byte[] bytes = new byte[length];
+            fixed (byte* ptr = bytes)
             {
-                return null;
-            }
+                int result = rtmidi_get_port_name(device, portNumber, ptr, ref length);
+                if (!device.Ok)
+                {
+                    return (null, null);
+                }
 
-            return Marshal.PtrToStringAnsi((IntPtr)buffer);
+                string text = Marshal.PtrToStringAnsi((IntPtr)ptr);
+                return (text, bytes);
+            }
         }
 
         #endregion
