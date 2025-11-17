@@ -142,5 +142,17 @@ namespace Minis
                 _backend.QueueDeltaStateEvent(_device.GetCC(cc), ref value);
             }
         }
+
+        public void FullReset()
+        {
+            if (_device == null)
+                return;
+
+            var state = new MidiDeviceState()
+            {
+                pitchBend = 8192,
+            };
+            _backend.QueueStateEvent(_device, ref state);
+        }
     }
 }

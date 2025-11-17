@@ -3,6 +3,7 @@ using System.Threading;
 using Minis.Native;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
+using UnityEngine.InputSystem.LowLevel;
 
 using static Minis.Native.RtMidi;
 
@@ -27,6 +28,9 @@ namespace Minis
         private Thread _readThread;
         private EventWaitHandle m_ThreadStop = new EventWaitHandle(false, EventResetMode.ManualReset);
 
+        private bool _activeSensing;
+        private double _lastMessageTime;
+
         public MidiPort(MidiBackend backend, uint portNumber)
         {
             _backend = backend;
@@ -37,6 +41,7 @@ namespace Minis
                 throw new Exception("Failed to create RtMidi handle!");
 
             rtmidi_open_port(_portHandle, portNumber, "RtMidi Input");
+            rtmidi_in_ignore_types(_portHandle, midiSysex: true, midiTime: true, midiSense: false);
             if (!_portHandle.Ok)
             {
                 string error = _portHandle.ErrorMessage;
@@ -150,6 +155,12 @@ namespace Minis
 
             while (!m_ThreadStop.WaitOne(1))
             {
+                if (_activeSensing && Math.Abs(InputState.currentTime - _lastMessageTime) > 0.330)
+                {
+                    FullReset();
+                    _activeSensing = false;
+                }
+
                 uint size;
                 lock (_portHandle)
                 {
@@ -177,6 +188,7 @@ namespace Minis
 
         private void HandleStatus(byte status, byte* buffer, uint length)
         {
+            _lastMessageTime = InputState.currentTime;
             switch (status & 0xF0)
             {
                 case 0x80: // Note off
@@ -240,6 +252,11 @@ namespace Minis
                     {
                         // CC 120-127 are channel mode messages
                         case 120: // All Sound Off
+                        {
+                            _allChannels.FullReset();
+                            GetChannelDevice(channel).FullReset();
+                            break;
+                        }
                         case 123: // All Notes Off
                         case 124: // Omni Off
                         case 125: // Omni On
@@ -339,8 +356,16 @@ namespace Minis
                             break;
                         }
                         // case 0xFD:
-                        // case 0xFE: // Active sensing
-                        // case 0xFF: // System reset
+                        case 0xFE: // Active sensing
+                        {
+                            _activeSensing = true;
+                            break;
+                        }
+                        case 0xFF: // System reset
+                        {
+                            FullReset();
+                            break;
+                        }
                     }
                     break;
                 }
@@ -353,6 +378,16 @@ namespace Minis
                 _channels[channel] = new MidiChannel(_backend, _name, channel);
 
             return _channels[channel];
+        }
+
+        private void FullReset()
+        {
+            _allChannels.FullReset();
+            for (int i = 0; i < _channels.Length; i++)
+            {
+                DisposeChannel(_channels[i]);
+                _channels[i] = null;
+            }
         }
     }
 }
