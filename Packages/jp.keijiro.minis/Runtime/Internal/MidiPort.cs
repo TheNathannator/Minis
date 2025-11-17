@@ -297,6 +297,53 @@ namespace Minis
                     GetChannelDevice(channel).ProcessPitchBend(value);
                     break;
                 }
+                case 0xF0: // System
+                {
+                    switch (status)
+                    {
+                        // case 0xF0: // System exclusive
+                        // case 0xF1: // MIDI time code quarter frame
+                        // case 0xF2: // Song position pointer
+                        // case 0xF3: // Song select
+                        // case 0xF4:
+                        // case 0xF5:
+                        // case 0xF6: // Tune request
+                        // case 0xF7: // End of exclusive
+                        // case 0xF8: // Timing clock
+                        // case 0xF9:
+                        case 0xFA: // Start
+                        {
+                            _allChannels.ProcessPlaybackButton(MidiPlaybackButton.Start);
+                            foreach (var channel in _channels)
+                            {
+                                channel?.ProcessPlaybackButton(MidiPlaybackButton.Start);
+                            }
+                            break;
+                        }
+                        case 0xFB: // Continue
+                        {
+                            _allChannels.ProcessPlaybackButton(MidiPlaybackButton.Continue);
+                            foreach (var channel in _channels)
+                            {
+                                channel?.ProcessPlaybackButton(MidiPlaybackButton.Continue);
+                            }
+                            break;
+                        }
+                        case 0xFC: // Stop
+                        {
+                            _allChannels.ProcessPlaybackButton(MidiPlaybackButton.Stop);
+                            foreach (var channel in _channels)
+                            {
+                                channel?.ProcessPlaybackButton(MidiPlaybackButton.Stop);
+                            }
+                            break;
+                        }
+                        // case 0xFD:
+                        // case 0xFE: // Active sensing
+                        // case 0xFF: // System reset
+                    }
+                    break;
+                }
             }
         }
 

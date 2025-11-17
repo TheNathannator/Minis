@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.InteropServices;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Layouts;
@@ -6,12 +7,37 @@ using UnityEngine.InputSystem.Utilities;
 
 namespace Minis
 {
+    [Flags]
+    internal enum MidiPlaybackButton : byte
+    {
+        None = 0,
+
+        Start = 1 << 0,
+        Continue = 1 << 1,
+        Stop = 1 << 2,
+    }
+
     /// <summary>
     /// The state format used for a MIDI device.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct MidiDeviceState : IInputStateTypeInfo
+    internal unsafe struct MidiDeviceState : IInputStateTypeInfo
     {
+        public const int NoteOffset = 0;
+        public const int NoteCount = 128;
+
+        public const int CcOffset = NoteOffset + NoteCount;
+        public const int CcCount = 120;
+
+        public const int PitchBendOffset = CcOffset + CcCount;
+        public const int PitchBendSize = sizeof(ushort);
+
+        public const int ChannelPressureOffset = PitchBendOffset + PitchBendSize;
+        public const int ChannelPressureSize = sizeof(byte);
+
+        public const int PlaybackButtonsOffset = ChannelPressureOffset + ChannelPressureSize;
+        public const int PlaybackButtonsSize = sizeof(byte);
+
         public static readonly FourCC Format = new FourCC('M', 'I', 'D', 'J');
         public FourCC format => Format;
 
@@ -274,5 +300,10 @@ namespace Minis
 
         [InputControl(name = "channelPressure", displayName = "Channel Pressure", shortDisplayName = "Ch.Press", layout = "MidiAxis")]
         public byte channelPressure;
+
+        [InputControl(name = "start",    displayName = "Start",    layout = "Button", bit = 0)]
+        [InputControl(name = "continue", displayName = "Continue", layout = "Button", bit = 1)]
+        [InputControl(name = "stop",     displayName = "Stop",     layout = "Button", bit = 2)]
+        public byte playbackButtons;
     }
 }

@@ -257,6 +257,12 @@ namespace Minis
             QueueDeltaStateEvent(device, offset, stateBuffer, stateLength);
         }
 
+        public unsafe void QueueDeltaStateEvent<TValue>(InputDevice device, uint offset, ref TValue value)
+            where TValue : unmanaged
+        {
+            QueueDeltaStateEvent(device, offset, UnsafeUtility.AddressOf(ref value), sizeof(TValue));
+        }
+
         // Based on InputSystem.QueueDeltaStateEvent<T>
         public unsafe void QueueDeltaStateEvent(InputDevice device, uint offset, void* stateBuffer, int stateLength)
         {

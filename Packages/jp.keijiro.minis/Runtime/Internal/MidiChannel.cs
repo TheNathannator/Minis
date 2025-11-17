@@ -109,6 +109,15 @@ namespace Minis
             _backend.QueueDeltaStateEvent(_device.channelPressure, ref value);
         }
 
+        public void ProcessPlaybackButton(MidiPlaybackButton button)
+        {
+            if (_device == null)
+                return;
+
+            byte value = (byte)button;
+            _backend.QueueDeltaStateEvent(_device, MidiDeviceState.PlaybackButtonsOffset, ref value);
+        }
+
         public void ResetAllNotes()
         {
             if (_device == null)

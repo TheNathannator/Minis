@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Layouts;
+using UnityEngine.InputSystem.LowLevel;
 
 namespace Minis
 {
@@ -16,7 +18,7 @@ namespace Minis
     // Custom input device class that processes input from a MIDI channel
     //
     [InputControlLayout(stateType = typeof(MidiDeviceState), displayName = "MIDI Device")]
-    public sealed class MidiDevice : InputDevice
+    public sealed class MidiDevice : InputDevice, IInputStateCallbackReceiver
     {
         /// <summary>
         /// The current <see cref="MidiDevice"/>.
@@ -92,6 +94,34 @@ namespace Minis
 
             channel = capabilities.channel;
         }
+
+        void IInputStateCallbackReceiver.OnStateEvent(InputEventPtr eventPtr)
+        {
+            InputState.Change(this, eventPtr);
+        }
+
+        unsafe void IInputStateCallbackReceiver.OnNextUpdate()
+        {
+            // Playback buttons must be reset at the start of an update,
+            // as they don't have an explicit release state
+
+            int eventSize = MidiDeviceState.PlaybackButtonsSize + (sizeof(DeltaStateEvent) - 1); // DeltaStateEvent already includes 1 byte at the end
+            byte* _deltaEvent = stackalloc byte[eventSize];
+            var deltaEvent = (DeltaStateEvent*)_deltaEvent;
+
+            *deltaEvent = new DeltaStateEvent()
+            {
+                baseEvent = new InputEvent(DeltaStateEvent.Type, eventSize, device.deviceId),
+                stateFormat = MidiDeviceState.Format,
+                stateOffset = MidiDeviceState.PlaybackButtonsOffset
+            };
+
+            UnsafeUtility.MemClear(deltaEvent->deltaState, deltaEvent->deltaStateSizeInBytes);
+            InputState.Change(this, &deltaEvent->baseEvent);
+        }
+
+        bool IInputStateCallbackReceiver.GetStateOffsetForEvent(InputControl control, InputEventPtr eventPtr, ref uint offset)
+            => false;
 
         /// <inheritdoc/>
         public override void MakeCurrent()
