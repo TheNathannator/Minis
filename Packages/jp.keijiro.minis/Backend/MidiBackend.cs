@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using Minis.Native;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-using static Minis.Native.RtMidi;
+using static Minis.Backend.RtMidi;
 
-namespace Minis
+namespace Minis.Backend
 {
     /// <summary>
     /// Manages RtMidi and the devices it reads.

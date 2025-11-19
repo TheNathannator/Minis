@@ -2,7 +2,7 @@ using System;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Layouts;
 
-namespace Minis
+namespace Minis.Backend
 {
     /// <summary>
     /// A single channel output on a MIDI device.

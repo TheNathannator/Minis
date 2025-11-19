@@ -8,7 +8,7 @@ using UnityEngine.InputSystem.Utilities;
 namespace Minis
 {
     [Flags]
-    internal enum MidiPlaybackButton : byte
+    public enum MidiPlaybackButton : byte
     {
         None = 0,
 
@@ -21,7 +21,7 @@ namespace Minis
     /// The state format used for a MIDI device.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    internal unsafe struct MidiDeviceState : IInputStateTypeInfo
+    public unsafe struct MidiDeviceState : IInputStateTypeInfo
     {
         public const int NoteOffset = 0;
         public const int NoteCount = 128;

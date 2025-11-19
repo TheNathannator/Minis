@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices;
 using System;
 
-namespace Minis.Native
+namespace Minis.Backend
 {
-    public enum RtMidiApi
+    internal enum RtMidiApi
     {
         Unspecified,
         MacOsXCore,
@@ -16,7 +16,7 @@ namespace Minis.Native
         Android
     }
 
-    public enum RtMidiErrorType
+    internal enum RtMidiErrorType
     {
         Warning,
         DebugWarning,

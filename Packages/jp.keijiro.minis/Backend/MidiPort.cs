@@ -1,13 +1,12 @@
 using System;
 using System.Threading;
-using Minis.Native;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.InputSystem.LowLevel;
 
-using static Minis.Native.RtMidi;
+using static Minis.Backend.RtMidi;
 
-namespace Minis
+namespace Minis.Backend
 {
     /// <summary>
     /// A MIDI device, as reported by RtMidi.
@@ -17,7 +16,7 @@ namespace Minis
         private readonly MidiBackend _backend;
 
         private RtMidiInHandle _portHandle;
-        private uint _portNumber;
+        private readonly uint _portNumber;
 
         private readonly string _name;
         private readonly byte[] _nameBytes;

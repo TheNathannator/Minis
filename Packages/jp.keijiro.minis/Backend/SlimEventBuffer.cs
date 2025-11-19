@@ -6,7 +6,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.InputSystem.LowLevel;
 
-namespace Minis
+namespace Minis.Backend
 {
     // Borrowed from https://github.com/TheNathannator/HIDrogen
     /// <summary>

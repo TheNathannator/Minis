@@ -10,7 +10,7 @@ using UnityEngine.InputSystem.Utilities;
 
 // Borrowed from https://github.com/TheNathannator/HIDrogen
 
-namespace Minis
+namespace Minis.Backend
 {
     internal abstract class CustomInputBackend : IDisposable
     {
