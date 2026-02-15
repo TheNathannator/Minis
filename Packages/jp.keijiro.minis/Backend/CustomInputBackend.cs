@@ -12,15 +12,22 @@ using UnityEngine.InputSystem.Utilities;
 
 namespace Minis.Backend
 {
-    internal abstract class CustomInputBackend : IDisposable
+    internal abstract class CustomInputBackend<TBackendDevice, TAddContext> : IDisposable
+        where TBackendDevice : class
+        where TAddContext : IDisposable
     {
         // Safety limit, to avoid allocating too much on the stack
         // (InputSystem.StateEventBuffer.kMaxSize)
         protected const int kMaxStateSize = 512;
 
-        // Queue for devices; they must be managed on the main thread
-        internal readonly ConcurrentBag<(InputDeviceDescription description, IDisposable context)> m_AdditionQueue
-            = new ConcurrentBag<(InputDeviceDescription, IDisposable)>();
+        // Map from input system instance to backend instance
+        private readonly Dictionary<InputDevice, TBackendDevice> m_DeviceLookup
+            = new Dictionary<InputDevice, TBackendDevice>();
+
+        // Queues for devices; they must be managed on the main thread
+        private readonly ConcurrentBag<(InputDeviceDescription description, TAddContext context)> m_AdditionQueue
+            = new ConcurrentBag<(InputDeviceDescription, TAddContext)>();
+        internal readonly ConcurrentBag<InputDevice> m_RemovalQueue = new ConcurrentBag<InputDevice>();
 
         // We use a custom buffering implementation because the built-in implementation is
         // not friendly to managed threads, despite what the docs for InputSystem.QueueEvent/QueueStateEvent
@@ -40,7 +47,7 @@ namespace Minis.Backend
 
         ~CustomInputBackend()
         {
-            Debug.LogError($"[Minis] Input backend {GetType()} was not disposed correctly! " +
+            Logging.Error($"Input backend {GetType()} was not disposed correctly! " +
                 "Input system resources cannot safely be reclaimed on the finalizer thread.");
         }
 
@@ -57,87 +64,123 @@ namespace Minis.Backend
             GC.SuppressFinalize(this);
         }
 
-        public unsafe void Start()
+        private void CheckStarted()
+        {
+            if (!m_Started)
+            {
+                throw new InvalidOperationException("Backend has not been started yet!");
+            }
+        }
+
+        public void Start()
         {
             if (!m_Started)
             {
                 m_Started = true;
-
-                try
-                {
-                    OnStart();
-
-                    InputSystem.onBeforeUpdate += Update;
-                    InputSystem.onDeviceChange += OnDeviceChange;
-                    InputSystem.onDeviceCommand += OnDeviceCommand;
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[Minis] Failed to start {GetType()} backend!");
-                    Debug.LogException(ex);
-                }
+                OnStart();
             }
         }
 
-        public unsafe void Stop()
+        public void Stop()
         {
             if (m_Started)
             {
                 m_Started = false;
 
-                InputSystem.onBeforeUpdate -= Update;
-                InputSystem.onDeviceChange -= OnDeviceChange;
-                InputSystem.onDeviceCommand -= OnDeviceCommand;
-
-                try
+                while (m_AdditionQueue.TryTake(out var pair))
                 {
-                    while (m_AdditionQueue.TryTake(out var pair))
-                    {
-                        pair.context?.Dispose();
-                    }
+                    pair.context?.Dispose();
+                }
 
-                    InternalOnStop();
-                    OnStop();
-                }
-                catch (Exception ex)
+                foreach (var pair in m_DeviceLookup)
                 {
-                    Debug.LogError($"[Minis] Failed to stop {GetType()} backend!");
-                    Debug.LogException(ex);
+                    OnDeviceRemoved(pair.Value);
+                    InputSystem.RemoveDevice(pair.Key);
                 }
+                m_DeviceLookup.Clear();
+
+                OnStop();
             }
         }
 
-        private void Update()
+        public void Update()
         {
-            while (m_AdditionQueue.TryTake(out var context))
-            {
-                AddDevice(context.description, context.context);
-            }
+            CheckStarted();
 
             OnUpdate();
+            FlushDeviceQueue();
             FlushEventBuffer();
         }
 
-        protected abstract void OnDispose();
-        protected virtual void OnStart() {}
-        protected virtual void OnStop() {}
-        protected virtual void OnUpdate() {}
-
-        protected abstract void InternalOnStop();
-
-        protected abstract void AddDevice(InputDeviceDescription description, IDisposable context);
-        protected abstract void OnDeviceChange(InputDevice device, InputDeviceChange change);
-        protected abstract unsafe long? OnDeviceCommand(InputDevice device, InputDeviceCommand* command);
-
-        public void QueueDeviceAdd(InputDeviceDescription description, IDisposable context)
+        public void OnDeviceChange(InputDevice device, InputDeviceChange change)
         {
-            m_AdditionQueue.Add((description, context));
+            CheckStarted();
+
+            if (change == InputDeviceChange.Removed)
+            {
+                if (!m_DeviceLookup.TryGetValue(device, out var backendDevice))
+                    return;
+
+                OnDeviceRemoved(backendDevice);
+                m_DeviceLookup.Remove(device);
+            }
         }
 
-        public void QueueDeviceRemove(InputDevice device)
+        public unsafe long? OnDeviceCommand(InputDevice device, InputDeviceCommand* command)
         {
-            var removeEvent = DeviceRemoveEvent.Create(device.deviceId);
-            QueueEvent(ref removeEvent);
+            CheckStarted();
+
+            if (!m_DeviceLookup.TryGetValue(device, out var backendDevice))
+            {
+                return null;
+            }
+
+            return OnDeviceCommand(backendDevice, command);
+        }
+
+        private void FlushDeviceQueue()
+        {
+            // Process device removals first, for backends that may remove and re-add a device in the same update
+            while (m_RemovalQueue.TryTake(out var device))
+            {
+                InputSystem.RemoveDevice(device);
+            }
+
+            while (m_AdditionQueue.TryTake(out var _context))
+            {
+                var (description, context) = _context;
+                using (context)
+                {
+                    // The input system will throw if a device layout can't be found
+                    InputDevice device;
+                    try
+                    {
+                        device = InputSystem.AddDevice(description);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Ignore layout-not-found exception
+                        continue;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logging.Exception("Failed to add device to the input system!", ex);
+                        continue;
+                    }
+
+                    try
+                    {
+                        var backendDevice = OnDeviceAdded(device, context);
+                        m_DeviceLookup.Add(device, backendDevice);
+                    }
+                    catch (Exception ex)
+                    {
+                        InputSystem.RemoveDevice(device);
+                        Logging.Exception("Error in device added callback!", ex);
+                        continue;
+                    }
+                }
+            }
         }
 
         private void FlushEventBuffer()
@@ -157,11 +200,31 @@ namespace Minis.Backend
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[Minis] Error when flushing an event!");
-                    Debug.LogException(ex);
+                    Logging.Exception("Error when flushing an event!", ex);
                 }
             }
             buffer.Reset();
+        }
+
+        protected abstract void OnDispose();
+
+        protected virtual void OnStart() {}
+        protected virtual void OnStop() {}
+        protected virtual void OnUpdate() {}
+
+        protected abstract TBackendDevice OnDeviceAdded(InputDevice device, TAddContext context);
+        protected abstract void OnDeviceRemoved(TBackendDevice device);
+
+        protected virtual unsafe long? OnDeviceCommand(TBackendDevice device, InputDeviceCommand* command) => null;
+
+        public void QueueDeviceAdd(InputDeviceDescription description, TAddContext context)
+        {
+            m_AdditionQueue.Add((description, context));
+        }
+
+        public void QueueDeviceRemove(InputDevice device)
+        {
+            m_RemovalQueue.Add(device);
         }
 
         public unsafe void QueueEvent(InputEventPtr eventPtr)
@@ -232,7 +295,7 @@ namespace Minis.Backend
             UnsafeUtility.MemCpy(stateEvent->state, stateBuffer, stateLength);
 
             // Queue state event
-            QueueEvent(&stateEvent->baseEvent);
+            QueueEvent((InputEvent*)stateEvent);
         }
 
         public unsafe void QueueDeltaStateEvent<TValue>(InputControl control, ref TValue value)
@@ -241,6 +304,13 @@ namespace Minis.Backend
             QueueDeltaStateEvent(control, UnsafeUtility.AddressOf(ref value), sizeof(TValue));
         }
 
+        public unsafe void QueueDeltaStateEvent<TValue>(InputDevice device, uint offset, ref TValue value)
+            where TValue : unmanaged
+        {
+            QueueDeltaStateEvent(device, offset, UnsafeUtility.AddressOf(ref value), sizeof(TValue));
+        }
+
+        // Based on InputSystem.QueueDeltaStateEvent<T>
         public unsafe void QueueDeltaStateEvent(InputControl control, void* stateBuffer, int stateLength)
         {
             var stateBlock = control.stateBlock;
@@ -255,12 +325,6 @@ namespace Minis.Backend
             var device = control.device;
             uint offset = stateBlock.byteOffset - device.stateBlock.byteOffset;
             QueueDeltaStateEvent(device, offset, stateBuffer, stateLength);
-        }
-
-        public unsafe void QueueDeltaStateEvent<TValue>(InputDevice device, uint offset, ref TValue value)
-            where TValue : unmanaged
-        {
-            QueueDeltaStateEvent(device, offset, UnsafeUtility.AddressOf(ref value), sizeof(TValue));
         }
 
         // Based on InputSystem.QueueDeltaStateEvent<T>
@@ -288,85 +352,5 @@ namespace Minis.Backend
 
             QueueEvent(&deltaEvent->baseEvent);
         }
-    }
-
-    internal abstract class CustomInputBackend<TBackendDevice> : CustomInputBackend
-        where TBackendDevice : class
-    {
-        // Available devices by InputSystem device ID
-        private readonly Dictionary<InputDevice, TBackendDevice> m_DeviceLookup
-            = new Dictionary<InputDevice, TBackendDevice>();
-
-        protected sealed override void InternalOnStop()
-        {
-            foreach (var pair in m_DeviceLookup)
-            {
-                OnDeviceRemoved(pair.Value);
-                InputSystem.RemoveDevice(pair.Key);
-            }
-            m_DeviceLookup.Clear();
-        }
-
-        protected sealed override void AddDevice(InputDeviceDescription description, IDisposable context)
-        {
-            using (context)
-            {
-                // The input system will throw if a device layout can't be found
-                InputDevice device;
-                try
-                {
-                    device = InputSystem.AddDevice(description);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[Minis] Failed to add device to the input system!");
-                    Debug.LogException(ex);
-                    return;
-                }
-
-                try
-                {
-                    var backendDevice = OnDeviceAdded(device, context);
-                    m_DeviceLookup.Add(device, backendDevice);
-                }
-                catch (Exception ex)
-                {
-                    InputSystem.RemoveDevice(device);
-                    Debug.LogError($"[Minis] Error in device added callback!");
-                    Debug.LogException(ex);
-                    return;
-                }
-            }
-        }
-
-        protected sealed override void OnDeviceChange(InputDevice device, InputDeviceChange change)
-        {
-            if (change == InputDeviceChange.Removed)
-            {
-                if (!m_DeviceLookup.TryGetValue(device, out var backendDevice))
-                    return;
-
-                OnDeviceRemoved(backendDevice);
-                m_DeviceLookup.Remove(device);
-            }
-        }
-
-        protected sealed override unsafe long? OnDeviceCommand(InputDevice device, InputDeviceCommand* command)
-        {
-            if (device == null)
-                return null;
-            if (command == null)
-                return InputDeviceCommand.GenericFailure;
-
-            if (!m_DeviceLookup.TryGetValue(device, out var backendDevice))
-                return null;
-
-            return OnDeviceCommand(backendDevice, command);
-        }
-
-        protected abstract TBackendDevice OnDeviceAdded(InputDevice device, IDisposable context);
-        protected abstract void OnDeviceRemoved(TBackendDevice device);
-
-        protected virtual unsafe long? OnDeviceCommand(TBackendDevice device, InputDeviceCommand* command) => null;
     }
 }

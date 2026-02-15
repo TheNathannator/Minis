@@ -10,7 +10,7 @@ namespace Minis.Backend
     /// <summary>
     /// Manages RtMidi and the devices it reads.
     /// </summary>
-    internal sealed class MidiBackend : CustomInputBackend<MidiChannel>
+    internal sealed class MidiBackend : CustomInputBackend<MidiChannel, MidiChannel>
     {
         private RtMidiInHandle _rtMidi;
 
@@ -95,9 +95,8 @@ namespace Minis.Backend
             }
         }
 
-        protected override MidiChannel OnDeviceAdded(InputDevice device, IDisposable context)
+        protected override MidiChannel OnDeviceAdded(InputDevice device, MidiChannel channel)
         {
-            var channel = (MidiChannel)context;
             channel.OnAdded(device);
             return channel;
         }
