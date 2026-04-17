@@ -1,5 +1,3 @@
-using UnityEditor;
-
 namespace Minis
 {
     /// <summary>
@@ -11,9 +9,9 @@ namespace Minis
         /// Initializes everything.
         /// </summary>
 #if UNITY_EDITOR
-        [InitializeOnLoadMethod]
+        [UnityEditor.InitializeOnLoadMethod]
 #else
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        [UnityEngine.RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
 #endif
         internal static void Initialize()
         {
