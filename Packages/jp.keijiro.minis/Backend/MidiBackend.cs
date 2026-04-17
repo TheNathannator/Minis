@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 using UnityEngine.InputSystem;
 
 using static Minis.Backend.RtMidi;
@@ -18,19 +17,53 @@ namespace Minis.Backend
         private uint _lastPortCount = 0;
         private List<MidiPort> _ports = new List<MidiPort>();
 
-        public MidiBackend()
+        private MidiBackend(RtMidiInHandle rtMidi)
         {
-            _rtMidi = rtmidi_in_create_default();
-            if (_rtMidi == null || _rtMidi.IsInvalid)
-                throw new Exception("Failed to create RtMidi handle!");
-            if (!_rtMidi.Ok)
-                throw new Exception($"Failed to create RtMidi handle: {_rtMidi.ErrorMessage}");
+            _rtMidi = rtMidi;
         }
 
         protected override void OnDispose()
         {
             _rtMidi?.Dispose();
             _rtMidi = null;
+        }
+
+        public static bool TryCreate(out MidiBackend backend)
+        {
+            backend = null;
+
+            RtMidiInHandle rtMidi = null;
+            try
+            {
+                rtMidi = rtmidi_in_create_default();
+                if (rtMidi == null || rtMidi.IsInvalid)
+                {
+                    Logging.Error("Failed to create RtMidi handle!");
+                    return false;
+                }
+
+                if (!rtMidi.Ok)
+                {
+                    Logging.Error($"Failed to create RtMidi handle: {rtMidi.ErrorMessage}");
+                    rtMidi.Dispose();
+                    return false;
+                }
+
+                backend = new MidiBackend(rtMidi);
+                return true;
+            }
+            catch (DllNotFoundException)
+            {
+                rtMidi?.Dispose();
+                Logging.Message("Could not load RtMidi, MIDI input will not be available.");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                rtMidi?.Dispose();
+                Logging.Exception("Failed to create MIDI backend!", ex);
+                return false;
+            }
         }
 
         protected override void OnStop()
@@ -47,7 +80,7 @@ namespace Minis.Backend
             uint portCount = rtmidi_get_port_count(_rtMidi);
             if (!_rtMidi.Ok)
             {
-                Debug.LogError($"[Minis] Failed to get RtMidi port count: {_rtMidi.ErrorMessage}");
+                Logging.Error($"Failed to get RtMidi port count: {_rtMidi.ErrorMessage}");
                 return;
             }
 
@@ -89,7 +122,7 @@ namespace Minis.Backend
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogException(ex);
+                        Logging.Exception($"Failed to open MIDI port (attempt {i + 1})", ex);
                     }
                 }
             }

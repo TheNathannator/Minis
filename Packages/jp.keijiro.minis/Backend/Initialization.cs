@@ -34,18 +34,10 @@ namespace Minis.Backend
             Application.quitting += Uninitialize;
 #endif
 
-            try
+            if (MidiBackend.TryCreate(out var backend))
             {
-                _backend = new MidiBackend();
+                _backend = backend;
                 _backend.Start();
-            }
-            catch (Exception ex)
-            {
-                _backend?.Dispose();
-                _backend = null;
-
-                Debug.LogError("[Minis] Failed to initialize backends!");
-                Debug.LogException(ex);
             }
         }
 
