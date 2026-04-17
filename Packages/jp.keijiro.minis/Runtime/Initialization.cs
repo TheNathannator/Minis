@@ -1,3 +1,7 @@
+using UnityEngine.Scripting;
+
+[assembly: AlwaysLinkAssembly]
+
 namespace Minis
 {
     /// <summary>

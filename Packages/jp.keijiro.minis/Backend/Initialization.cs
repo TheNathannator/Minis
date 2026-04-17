@@ -1,6 +1,9 @@
 using System;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Scripting;
+
+[assembly: AlwaysLinkAssembly]
 
 namespace Minis.Backend
 {
