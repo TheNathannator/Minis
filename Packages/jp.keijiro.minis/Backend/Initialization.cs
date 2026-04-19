@@ -1,6 +1,7 @@
 using System;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Scripting;
 
 [assembly: AlwaysLinkAssembly]
@@ -36,8 +37,19 @@ namespace Minis.Backend
 
             if (MidiBackend.TryCreate(out var backend))
             {
-                _backend = backend;
-                _backend.Start();
+                try
+                {
+                    backend.Start();
+                    _backend = backend;
+
+                    InputSystem.onBeforeUpdate += Update;
+                    InputSystem.onDeviceChange += OnDeviceChange;
+                }
+                catch (Exception ex)
+                {
+                    backend.Dispose();
+                    Logging.Exception($"Failed to start backend!", ex);
+                }
             }
         }
 
@@ -52,14 +64,26 @@ namespace Minis.Backend
 
             try
             {
+                InputSystem.onBeforeUpdate -= Update;
+                InputSystem.onDeviceChange -= OnDeviceChange;
+
                 _backend?.Dispose();
                 _backend = null;
             }
             catch (Exception ex)
             {
-                Debug.LogError("[Minis] Failed to uninitialize backends!");
-                Debug.LogException(ex);
+                Logging.Exception("Failed to stop backend!", ex);
             }
+        }
+
+        private static void Update()
+        {
+            _backend?.Update();
+        }
+
+        private static void OnDeviceChange(InputDevice device, InputDeviceChange change)
+        {
+            _backend?.OnDeviceChange(device, change);
         }
     }
 }
