@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine.InputSystem;
 
 using static Minis.Backend.RtMidi;
@@ -16,6 +17,15 @@ namespace Minis.Backend
         // Track port count separately, for better handling of error scenarios
         private uint _lastPortCount = 0;
         private List<MidiPort> _ports = new List<MidiPort>();
+
+        // Port scanning runs on its own thread: on iOS, CoreMIDI calls such as
+        // MIDIGetNumberOfSources pump the current runloop while talking to
+        // midiserver, which re-enters Unity's player loop when called from
+        // onBeforeUpdate ("PlayerLoop internal function has been called
+        // recursively") and corrupts input/rendering state. Message reads are
+        // already threaded (see MidiPort); this matches that design.
+        private Thread _scanThread;
+        private volatile bool _keepScanning;
 
         private MidiBackend(RtMidiInHandle rtMidi)
         {
@@ -66,15 +76,41 @@ namespace Minis.Backend
             }
         }
 
+        protected override void OnStart()
+        {
+            _keepScanning = true;
+            _scanThread = new Thread(ScanThread) { IsBackground = true };
+            _scanThread.Start();
+        }
+
         protected override void OnStop()
         {
+            _keepScanning = false;
+            _scanThread?.Join();
+            _scanThread = null;
+
             foreach (var port in _ports)
                 port?.Dispose();
             _ports.Clear();
             _lastPortCount = 0;
         }
 
-        protected override void OnUpdate()
+        private void ScanThread()
+        {
+            for (; _keepScanning; Thread.Sleep(500))
+            {
+                try
+                {
+                    ScanPorts();
+                }
+                catch (Exception ex)
+                {
+                    Logging.Exception("Failed to scan MIDI ports", ex);
+                }
+            }
+        }
+
+        private void ScanPorts()
         {
             // Check for port connections/disconnections
             uint portCount = rtmidi_get_port_count(_rtMidi);
