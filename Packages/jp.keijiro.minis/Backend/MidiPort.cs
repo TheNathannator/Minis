@@ -74,7 +74,18 @@ namespace Minis.Backend
             if (_portHandle != null)
             {
                 rtmidi_close_port(_portHandle);
-                _portHandle.Dispose();
+                if (_portHandle.Ok)
+                {
+                    _portHandle.Dispose();
+                }
+                else
+                {
+                    // If closing fails (e.g. the device was unplugged), RtMidi leaves the port marked as connected,
+                    // and its destructor will attempt to close it again. That second attempt throws from within
+                    // the destructor, which aborts the entire process, so the handle must be leaked instead.
+                    Logging.Error($"Failed to close MIDI port '{_name}', leaking handle: {_portHandle.ErrorMessage}");
+                    _portHandle.SetHandleAsInvalid();
+                }
                 _portHandle = null;
             }
 
